@@ -1,0 +1,29 @@
+[package]
+name = "codex-skill-forge"
+version = "0.2.0"
+description = "Codex Skill Installer rebuilt on Tauri 2."
+authors = ["Sunwood-ai-labs"]
+edition = "2021"
+
+[lib]
+name = "codex_skill_forge_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+dirs = "6"
+flate2 = "1"
+percent-encoding = "2.3"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "gzip", "json", "rustls-tls"] }
+rfd = "0.15"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2.10.3", features = [] }
+tar = "0.4"
+tempfile = "3"
+thiserror = "2"
+url = "2.5"
+walkdir = "2"
+zip = { version = "2", default-features = false, features = ["deflate"] }

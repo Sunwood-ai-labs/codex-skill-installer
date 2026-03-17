@@ -1,70 +1,65 @@
 # Codex Skill Installer
 
-Codex Skill Installer is a cross-platform desktop app for installing Codex skills from GitHub into your local Codex profile.
+Codex Skill Installer is now a Tauri 2 desktop app with a React + TypeScript frontend and a Rust core.
 
-It follows the common Codex layout:
+It keeps the original workflow:
 
-- Any platform with `CODEX_HOME`: `CODEX_HOME/skills`
-- Windows fallback: `%USERPROFILE%\\.codex\\skills`
+- Paste a GitHub repository, `tree`, or `blob` URL.
+- Inspect the repository for directories that contain `SKILL.md`.
+- Select one or more detected skills.
+- Install them into your local Codex skills directory.
+- Skip existing folders unless overwrite is enabled.
+
+The default install target still follows the common Codex layout:
+
+- `CODEX_HOME/skills` when `CODEX_HOME` is set
+- Windows fallback: `%USERPROFILE%\.codex\skills`
 - macOS/Linux fallback: `~/.codex/skills`
 
-## What It Does
+## Stack
 
-- Accepts a GitHub repository URL, `tree` URL, or `blob` URL that points at a skill.
-- Downloads a repository snapshot and scans for directories that contain `SKILL.md`.
-- Lets you pick one or more discovered skills from a GUI list.
-- Installs those skills into your local Codex skills directory.
-- Protects existing skill folders unless you explicitly enable overwrite.
+- Tauri `2.10.3`
+- React `19`
+- TypeScript `5.9`
+- Vite `8`
+- Rust backend commands for GitHub archive download, safe extraction, skill discovery, and installation
+
+## Prerequisites
+
+- Node.js `20+`
+- Rust toolchain installed and available on `PATH`
+- Tauri OS prerequisites:
+  - Windows: WebView2 runtime plus the standard Rust MSVC toolchain
+  - macOS: Xcode command line tools
+  - Linux: WebKitGTK and related desktop build dependencies
+
+Official references:
+
+- [Tauri prerequisites](https://tauri.app/start/prerequisites/)
+- [Tauri crate](https://crates.io/crates/tauri)
 
 ## Quick Start
 
 ```powershell
-uv sync --all-groups
-uv run codex-skill-installer
+npm install
+npm run tauri dev
 ```
 
-You can also launch it with:
+## Production Build
 
 ```powershell
-uv run python -m codex_skill_forge
+npm run tauri build
 ```
 
-## Desktop Build (UV + PyInstaller)
+Build output is written under `src-tauri/target/release/bundle/`.
 
-Build a native executable for your current platform with:
+## Web Build Check
+
+If you only want to validate the React frontend without compiling Rust:
 
 ```powershell
-uv sync --group build
-uv run python scripts/build_desktop.py
+npm run build
 ```
-
-The default build mode is `onedir`, which is the safer cross-platform option.
-You can opt into `onefile` when you specifically want a single-file bundle:
-
-```powershell
-uv run python scripts/build_desktop.py --mode onefile
-```
-
-Add a suffix explicitly for CI or naming consistency:
-
-```powershell
-uv run python scripts/build_desktop.py --artifact-suffix linux
-```
-
-Artifacts are written to `dist/` by default:
-
-- `onedir`: `dist/codex-skill-installer[-suffix]/`
-- `onefile` on Linux/macOS: `dist/codex-skill-installer[-suffix]`
-- `onefile` on Windows: `dist/codex-skill-installer[-suffix].exe`
-
-The exact artifact shape can vary slightly by platform, especially on macOS, so treat the
-generated `dist/` output as the source of truth for release packaging.
-
-For project automation and release-style packaging, a GitHub Actions workflow is available at
-`.github/workflows/build-desktop.yml` and builds artifacts on Linux, macOS, and Windows.
-
-PyInstaller requires building on each target OS separately, so the workflow uses a matrix build
-instead of trying to cross-compile from one runner.
 
 ## Supported Inputs
 
@@ -72,24 +67,20 @@ instead of trying to cross-compile from one runner.
 - `https://github.com/owner/repo/tree/main/path/to/skill`
 - `https://github.com/owner/repo/blob/main/path/to/skill/SKILL.md`
 
-The optional `Ref` field in the app can override the ref embedded in the URL.
+The optional `Ref override` field can replace the ref embedded in the URL.
 
-## Development
+## Development Notes
 
-Run the test suite:
+- The app performs GitHub archive download and extraction in Rust, not in the browser.
+- Unsafe archive paths are rejected during extraction.
+- Install results preserve the original `installed / skipped / failed` outcome model.
+- The folder picker is implemented as a native desktop dialog through the Tauri host side.
 
-```powershell
-uv run pytest
-```
+## Validation
 
-Run a quick import check:
+- Frontend typecheck + bundle: `npm run build`
+- Rust unit tests: `cargo test --manifest-path src-tauri/Cargo.toml`
 
-```powershell
-uv run python -m compileall src
-```
+## CI
 
-## Notes
-
-- The current implementation is designed around GitHub repository archives.
-- Public GitHub repositories are the primary verified path.
-- Existing destination directories are skipped unless `Overwrite existing skill folders` is enabled.
+GitHub Actions builds Windows, macOS, and Linux desktop bundles from `.github/workflows/build-desktop.yml`.

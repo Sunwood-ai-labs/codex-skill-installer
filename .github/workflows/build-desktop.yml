@@ -16,23 +16,36 @@ jobs:
             suffix: windows
           - os: macos-latest
             suffix: macos
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             suffix: linux
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up UV
-        uses: astral-sh/setup-uv@v5
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
 
-      - name: Install build dependencies
-        run: uv sync --group build
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Install JavaScript dependencies
+        run: npm ci
 
       - name: Build desktop artifact
-        run: uv run python scripts/build_desktop.py --artifact-suffix ${{ matrix.suffix }}
+        run: npm run tauri build
 
       - name: Upload desktop artifact
         uses: actions/upload-artifact@v4
         with:
           name: codex-skill-installer-${{ matrix.suffix }}
-          path: dist/
+          path: src-tauri/target/release/bundle/

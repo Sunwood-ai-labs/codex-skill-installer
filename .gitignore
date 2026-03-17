@@ -1,16 +1,22 @@
-# Python-generated files
+# Node and frontend build artifacts
+node_modules/
+dist/
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
+
+# Tauri / Rust build artifacts
+src-tauri/target/
+
+# Python legacy artifacts kept out of the new app flow
 __pycache__/
 *.py[oc]
-build/
-dist/
-wheels/
-*.egg-info
-*.spec
 .pyinstaller/
-
-# Virtual environments
-.venv
-
-# Test and local verification artifacts
 .pytest_cache/
+.venv/
+
+# Local scratch space
 tmp-fixed-smoke/
+tmp-smoke-verify/
+tmp-tauri-app/
+tmp-vite-react/
