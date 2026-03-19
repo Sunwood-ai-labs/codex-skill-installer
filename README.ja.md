@@ -87,6 +87,7 @@ Transcript:
 
 - フロントエンドの build と typecheck: `npm run build`
 - Rust の unit test: `cargo test --manifest-path src-tauri/Cargo.toml`
+- 公開中の直下 `skill.md` fixture repo を使う Browser Playwright スモーク: `npm run test:e2e:root-skill-md`
 - UI の根拠: `docs/screenshots/` 配下の追跡済みスクリーンショット。英語と日本語の `Setup` は `1280x820` で確認済みです。
 
 ## 📦 Production Build

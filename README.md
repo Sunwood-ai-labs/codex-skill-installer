@@ -87,6 +87,7 @@ Transcript:
 
 - Frontend build and typecheck: `npm run build`
 - Rust unit tests: `cargo test --manifest-path src-tauri/Cargo.toml`
+- Browser Playwright smoke for the public root-level `skill.md` fixture repo: `npm run test:e2e:root-skill-md`
 - UI evidence: tracked screenshots under `docs/screenshots/`, including English and Japanese `Setup` captures at `1280x820`
 
 ## 📦 Production Build

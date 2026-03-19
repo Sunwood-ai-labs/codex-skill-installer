@@ -21,3 +21,7 @@ tmp-fixed-smoke/
 tmp-smoke-verify/
 tmp-tauri-app/
 tmp-vite-react/
+
+# Playwright e2e harness artifacts
+tests/e2e/root-skill-md-harness/target/
+qa/root-skill-md-playwright/
