@@ -1,6 +1,6 @@
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 
 import {
   fetchDefaultDestination,
@@ -24,7 +24,11 @@ type FieldErrors = {
   repositoryUrl: string | null;
 };
 
+type WorkspaceTab = "candidates" | "logs";
+
 type WindowAction = (appWindow: ReturnType<typeof getCurrentWindow>) => Promise<void>;
+
+const MAX_LOG_ENTRIES = 250;
 
 const WORKFLOW_STEPS = [
   {
@@ -111,6 +115,7 @@ export default function App() {
     destination: null,
     repositoryUrl: null,
   });
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>("candidates");
   const [logs, setLogs] = useState<LogEntry[]>([
     {
       id: nextLogId(),
@@ -119,6 +124,7 @@ export default function App() {
     },
   ]);
   const [liveMessage, setLiveMessage] = useState(READY_TEXT);
+  const [unreadLogCount, setUnreadLogCount] = useState(0);
   const [isWindowMaximized, setIsWindowMaximized] = useState(false);
   const logViewportRef = useRef<HTMLDivElement | null>(null);
   const dialogCardRef = useRef<HTMLDivElement | null>(null);
@@ -126,19 +132,44 @@ export default function App() {
   const dialogTriggerRef = useRef<HTMLElement | null>(null);
   const urlInputRef = useRef<HTMLInputElement | null>(null);
   const destinationInputRef = useRef<HTMLInputElement | null>(null);
+  const candidateTabRef = useRef<HTMLButtonElement | null>(null);
+  const logTabRef = useRef<HTMLButtonElement | null>(null);
   const repositoryHelpId = useId();
   const destinationHelpId = useId();
 
+  function switchWorkspaceTab(nextTab: WorkspaceTab, options?: { focusTab?: boolean }): void {
+    setActiveTab(nextTab);
+    if (nextTab === "logs") {
+      setUnreadLogCount(0);
+    }
+
+    if (options?.focusTab) {
+      window.requestAnimationFrame(() => {
+        const nextButton = nextTab === "candidates" ? candidateTabRef.current : logTabRef.current;
+        nextButton?.focus();
+      });
+    }
+  }
+
   function appendLog(tone: LogTone, text: string): void {
-    setLogs((current) => [
-      ...current,
-      {
+    setLogs((current) => {
+      const nextEntry = {
         id: nextLogId(),
         tone,
         text,
-      },
-    ]);
+      };
+
+      return [...current.slice(-(MAX_LOG_ENTRIES - 1)), nextEntry];
+    });
     setLiveMessage(text);
+    setUnreadLogCount((current) => (activeTab === "logs" ? 0 : current + 1));
+  }
+
+  function invalidateWorkspaceResults(): void {
+    setCandidates((current) => (current.length === 0 ? current : []));
+    setSelectedPaths((current) => (current.length === 0 ? current : []));
+    setResult((current) => (current ? null : current));
+    switchWorkspaceTab("candidates");
   }
 
   function focusFirstErroredField(errors: FieldErrors): void {
@@ -185,6 +216,9 @@ export default function App() {
       : null;
     setDialog({ tone, title, message });
     setLiveMessage(`${title}. ${message}`);
+    if (tone === "error") {
+      switchWorkspaceTab("logs");
+    }
   }
 
   async function runWindowAction(action: WindowAction): Promise<void> {
@@ -231,8 +265,15 @@ export default function App() {
   }, [logs]);
 
   useEffect(() => {
+    if (activeTab === "logs") {
+      setUnreadLogCount(0);
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
     if (!dialog) {
-      dialogTriggerRef.current?.focus();
+      const fallbackTarget = dialogTriggerRef.current ?? urlInputRef.current ?? destinationInputRef.current;
+      fallbackTarget?.focus();
       return;
     }
 
@@ -318,6 +359,9 @@ export default function App() {
     try {
       const picked = await pickDestination();
       if (picked) {
+        if (picked !== destination) {
+          invalidateWorkspaceResults();
+        }
         setDestination(picked);
         handleFieldValidation("destination", picked);
       }
@@ -344,6 +388,7 @@ export default function App() {
     setBusyLabel("Inspecting repository...");
     setLiveMessage("Inspecting repository.");
     setResult(null);
+    switchWorkspaceTab("candidates");
     appendLog("info", "Inspecting repository...");
 
     try {
@@ -392,6 +437,7 @@ export default function App() {
     setBusy(true);
     setBusyLabel("Installing selected skills...");
     setLiveMessage("Installing selected skills.");
+    switchWorkspaceTab("logs");
     appendLog("info", "Installing selected skills...");
 
     try {
@@ -435,6 +481,7 @@ export default function App() {
     setCandidates([]);
     setSelectedPaths([]);
     setResult(null);
+    switchWorkspaceTab("candidates");
     appendLog("info", "Candidate list cleared.");
   }
 
@@ -453,6 +500,31 @@ export default function App() {
 
   function clearSelectedCandidates(): void {
     setSelectedPaths([]);
+  }
+
+  function handleWorkspaceTabKeyDown(event: ReactKeyboardEvent<HTMLButtonElement>): void {
+    if (
+      event.key !== "ArrowLeft" &&
+      event.key !== "ArrowRight" &&
+      event.key !== "Home" &&
+      event.key !== "End"
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+
+    if (event.key === "Home") {
+      switchWorkspaceTab("candidates", { focusTab: true });
+      return;
+    }
+
+    if (event.key === "End") {
+      switchWorkspaceTab("logs", { focusTab: true });
+      return;
+    }
+
+    switchWorkspaceTab(activeTab === "candidates" ? "logs" : "candidates", { focusTab: true });
   }
 
   function handleWindowControlClick(action: WindowAction): void {
@@ -474,6 +546,16 @@ export default function App() {
     ? `${result.installedCount} installed / ${result.skippedCount} skipped / ${result.failedCount} failed`
     : "No install run in this session";
   const destinationSummary = destination.trim() || "Resolving default target";
+  const shortlistHint = candidates.length === 0
+    ? "Run inspect to build the shortlist."
+    : selectedCount === 0
+      ? "Review each detected folder before you queue it."
+      : `${selectedCount} folders are marked and ready for install review.`;
+  const transcriptHint = busy
+    ? "The ledger is active. Keep this view open while the installer writes."
+    : result
+      ? "Audit the final outcomes before you close the session."
+      : "The ledger stays quiet until inspection or install starts.";
 
   return (
     <div className="app-shell">
@@ -633,251 +715,346 @@ export default function App() {
           </div>
         </section>
 
-        <section className="grid-layout">
-          <section className="panel form-panel">
-            <div className="panel-heading">
-              <div>
-                <p className="panel-kicker">Acquisition Desk</p>
-                <h2>Source repository & local target</h2>
+        <section className="hybrid-workspace">
+          <aside className="control-rail">
+            <section className="panel form-panel">
+              <div className="panel-heading">
+                <div>
+                  <p className="panel-kicker">Acquisition Desk</p>
+                  <h2>Source repository & local target</h2>
+                </div>
+                <span className="panel-tag">Source / destination</span>
               </div>
-              <span className="panel-tag">Source / destination</span>
-            </div>
-            <p className="panel-intro">
-              Start with a repository, tree, or blob URL. The installer will inspect the archive,
-              expose only valid skill folders, and keep existing installs untouched unless you
-              explicitly allow overwrite.
-            </p>
+              <p className="panel-intro">
+                Start with a repository, tree, or blob URL. The installer will inspect the archive,
+                expose only valid skill folders, and keep existing installs untouched unless you
+                explicitly allow overwrite.
+              </p>
 
-            <label className="field" htmlFor="repository-url">
-              <span>GitHub URL</span>
-              <input
-                aria-describedby={repositoryHelpId}
-                aria-invalid={repositoryUrlInvalid}
-                className={repositoryUrlInvalid ? "field-input field-input-invalid" : "field-input"}
-                disabled={busy}
-                id="repository-url"
-                onBlur={() => handleFieldValidation("repositoryUrl", repositoryUrl)}
-                onChange={(event) => {
-                  const nextValue = event.target.value;
-                  setRepositoryUrl(nextValue);
-                  clearFieldError("repositoryUrl");
-                }}
-                placeholder="https://github.com/owner/repo or /tree/ref/path"
-                ref={urlInputRef}
-                type="url"
-                value={repositoryUrl}
-              />
-              <span className={repositoryUrlInvalid ? "field-help field-help-error" : "field-help"} id={repositoryHelpId}>
-                {fieldErrors.repositoryUrl ?? "Repository, tree, and blob URLs are supported."}
-              </span>
-            </label>
-
-            <label className="field" htmlFor="ref-override">
-              <span>Ref override</span>
-              <input
-                className="field-input"
-                disabled={busy}
-                id="ref-override"
-                onChange={(event) => setRefValue(event.target.value)}
-                placeholder="optional override"
-                type="text"
-                value={refValue}
-              />
-              <span className="field-help">Use this when you want to inspect a different branch or tag.</span>
-            </label>
-
-            <div className="field">
-              <label htmlFor="destination-input">
-                <span>Install to</span>
-              </label>
-              <div className="destination-row">
+              <label className="field" htmlFor="repository-url">
+                <span>GitHub URL</span>
                 <input
-                  aria-describedby={destinationHelpId}
-                  aria-invalid={destinationInvalid}
-                  className={destinationInvalid ? "field-input field-input-invalid" : "field-input"}
+                  aria-describedby={repositoryHelpId}
+                  aria-invalid={repositoryUrlInvalid}
+                  className={repositoryUrlInvalid ? "field-input field-input-invalid" : "field-input"}
                   disabled={busy}
-                  id="destination-input"
-                  onBlur={() => handleFieldValidation("destination", destination)}
+                  id="repository-url"
+                  onBlur={() => handleFieldValidation("repositoryUrl", repositoryUrl)}
                   onChange={(event) => {
                     const nextValue = event.target.value;
-                    setDestination(nextValue);
-                    clearFieldError("destination");
+                    if (nextValue !== repositoryUrl) {
+                      invalidateWorkspaceResults();
+                    }
+                    setRepositoryUrl(nextValue);
+                    clearFieldError("repositoryUrl");
                   }}
-                  placeholder="Choose a Codex skills directory"
-                  ref={destinationInputRef}
-                  type="text"
-                  value={destination}
+                  placeholder="https://github.com/owner/repo or /tree/ref/path"
+                  ref={urlInputRef}
+                  type="url"
+                  value={repositoryUrl}
                 />
+                <span className={repositoryUrlInvalid ? "field-help field-help-error" : "field-help"} id={repositoryHelpId}>
+                  {fieldErrors.repositoryUrl ?? "Repository, tree, and blob URLs are supported."}
+                </span>
+              </label>
+
+              <label className="field" htmlFor="ref-override">
+                <span>Ref override</span>
+                <input
+                  className="field-input"
+                  disabled={busy}
+                  id="ref-override"
+                  onChange={(event) => {
+                    const nextValue = event.target.value;
+                    if (nextValue !== refValue) {
+                      invalidateWorkspaceResults();
+                    }
+                    setRefValue(nextValue);
+                  }}
+                  placeholder="optional override"
+                  type="text"
+                  value={refValue}
+                />
+                <span className="field-help">Use this when you want to inspect a different branch or tag.</span>
+              </label>
+
+              <div className="field">
+                <label htmlFor="destination-input">
+                  <span>Install to</span>
+                </label>
+                <div className="destination-row">
+                  <input
+                    aria-describedby={destinationHelpId}
+                    aria-invalid={destinationInvalid}
+                    className={destinationInvalid ? "field-input field-input-invalid" : "field-input"}
+                    disabled={busy}
+                    id="destination-input"
+                    onBlur={() => handleFieldValidation("destination", destination)}
+                    onChange={(event) => {
+                      const nextValue = event.target.value;
+                      if (nextValue !== destination) {
+                        invalidateWorkspaceResults();
+                      }
+                      setDestination(nextValue);
+                      clearFieldError("destination");
+                    }}
+                    placeholder="Choose a Codex skills directory"
+                    ref={destinationInputRef}
+                    type="text"
+                    value={destination}
+                  />
+                  <button
+                    className="ghost-button"
+                    disabled={busy}
+                    onClick={() => {
+                      void handleBrowse();
+                    }}
+                    type="button"
+                  >
+                    Browse
+                  </button>
+                </div>
+                <span className={destinationInvalid ? "field-help field-help-error" : "field-help"} id={destinationHelpId}>
+                  {fieldErrors.destination ?? "Defaults to your Codex skills directory when available."}
+                </span>
+              </div>
+
+              <label className="checkbox-field">
+                <input
+                  checked={overwrite}
+                  disabled={busy}
+                  onChange={(event) => setOverwrite(event.target.checked)}
+                  type="checkbox"
+                />
+                <span>Overwrite existing skill folders</span>
+              </label>
+
+              <div className="button-row">
                 <button
-                  className="ghost-button"
+                  className="primary-button"
                   disabled={busy}
                   onClick={() => {
-                    void handleBrowse();
+                    void handleInspect();
                   }}
                   type="button"
                 >
-                  Browse
+                  Inspect
+                </button>
+                <button
+                  className="secondary-action-button"
+                  disabled={busy || selectedCount === 0}
+                  onClick={() => {
+                    void handleInstall();
+                  }}
+                  type="button"
+                >
+                  Install selected
+                </button>
+                <button
+                  className="ghost-button"
+                  disabled={busy}
+                  onClick={clearCandidates}
+                  type="button"
+                >
+                  Clear
                 </button>
               </div>
-              <span className={destinationInvalid ? "field-help field-help-error" : "field-help"} id={destinationHelpId}>
-                {fieldErrors.destination ?? "Defaults to your Codex skills directory when available."}
-              </span>
-            </div>
 
-            <label className="checkbox-field">
-              <input
-                checked={overwrite}
-                disabled={busy}
-                onChange={(event) => setOverwrite(event.target.checked)}
-                type="checkbox"
-              />
-              <span>Overwrite existing skill folders</span>
-            </label>
-
-            <div className="button-row">
-              <button
-                className="primary-button"
-                disabled={busy}
-                onClick={() => {
-                  void handleInspect();
-                }}
-                type="button"
-              >
-                Inspect
-              </button>
-              <button
-                className="secondary-action-button"
-                disabled={busy || selectedCount === 0}
-                onClick={() => {
-                  void handleInstall();
-                }}
-                type="button"
-              >
-                Install selected
-              </button>
-              <button
-                className="ghost-button"
-                disabled={busy}
-                onClick={clearCandidates}
-                type="button"
-              >
-                Clear
-              </button>
-            </div>
-          </section>
-
-          <section className="panel candidate-panel">
-            <div className="panel-heading">
-              <div>
-                <p className="panel-kicker">Archive Review</p>
-                <h2>Candidate shortlist</h2>
+              <div className="control-fieldnote">
+                <span className="control-fieldnote-label">Desk note</span>
+                <p>{activeTab === "candidates" ? shortlistHint : transcriptHint}</p>
               </div>
-              <div className="mini-stats">
+            </section>
+          </aside>
+
+          <section className="workspace-panes" aria-label="Review workspace">
+            <div className="workspace-overview">
+              <div>
+                <p className="panel-kicker">Workbench focus</p>
+                <h2>{activeTab === "candidates" ? "Shortlist review" : "Session transcript"}</h2>
+              </div>
+              <p className="workspace-overview-copy">
+                {activeTab === "candidates"
+                  ? "Keep the list tight and deliberate. The right side is now a fixed review surface, not a scrolling dump."
+                  : "Treat the ledger as a control room. Every inspect and install event stays in reach while you work."}
+              </p>
+              <div className="workspace-overview-metrics">
                 <span>{candidates.length} found</span>
-                <span>{selectedCount} selected</span>
+                <span>{selectedCount} marked</span>
+                <span>{logs.length} ledger lines</span>
               </div>
             </div>
-            <p className="panel-intro">
-              Treat this as a catalog table, not a download bucket. Review each folder, then mark
-              the ones that deserve a place in your Codex profile.
-            </p>
 
-            {candidates.length === 0 ? (
-              <div className="empty-state">
-                <p>Shortlist is empty.</p>
-                <span>Run inspect to scan the repository archive for folders that ship with `SKILL.md`.</span>
-              </div>
-            ) : (
-              <>
-                <div className="candidate-toolbar">
-                  <p>Inspect first, then mark only the candidates that belong in your vault.</p>
-                  <div className="candidate-toolbar-actions">
-                    <button
-                      className="ghost-button candidate-toolbar-button"
-                      disabled={busy}
-                      onClick={selectAllCandidates}
-                      type="button"
-                    >
-                      Select all
-                    </button>
-                    <button
-                      className="ghost-button candidate-toolbar-button"
-                      disabled={busy || selectedCount === 0}
-                      onClick={clearSelectedCandidates}
-                      type="button"
-                    >
-                      Clear selection
-                    </button>
-                  </div>
-                </div>
-                <ul className="candidate-list">
-                  {candidates.map((candidate, index) => {
-                    const checked = selectedPaths.includes(candidate.path);
-                    return (
-                      <li className={`candidate-card ${checked ? "candidate-card-selected" : ""}`} key={candidate.path}>
-                        <label className="candidate-toggle">
-                          <div className="candidate-index-rail">
-                            <span className="candidate-index">{String(index + 1).padStart(2, "0")}</span>
-                            <input
-                              checked={checked}
-                              disabled={busy}
-                              onChange={() => toggleCandidate(candidate.path)}
-                              type="checkbox"
-                            />
-                          </div>
-                          <div className="candidate-copy">
-                            <div className="candidate-header">
-                              <strong>{candidate.name}</strong>
-                              <span className="candidate-chip">{checked ? "Queued" : "Available"}</span>
-                            </div>
-                            <code className="candidate-path">{candidate.path}</code>
-                            {candidate.description ? (
-                              <span className="candidate-description">{candidate.description}</span>
-                            ) : null}
-                          </div>
-                        </label>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </>
-            )}
-          </section>
-
-          <section className="panel log-panel">
-            <div className="panel-heading">
-              <div>
-                <p className="panel-kicker">Session Transcript</p>
-                <h2>Logs & outcomes</h2>
-              </div>
-              {result ? (
-                <div className="mini-stats">
-                  <span>{result.installedCount} installed</span>
-                  <span>{result.skippedCount} skipped</span>
-                  <span>{result.failedCount} failed</span>
-                </div>
-              ) : null}
-            </div>
-            <p className="panel-intro">
-              Every inspection and install event is written into the ledger below so you can verify
-              what happened without guessing.
-            </p>
-
-            <div className="log-ledger">
-              <div
-                aria-live="polite"
-                aria-busy={busy}
-                className="log-viewport"
-                ref={logViewportRef}
-                role="status"
+            <div aria-label="Workspace view" className="workspace-tabbar" role="tablist">
+              <button
+                aria-controls="workspace-panel-candidates"
+                aria-selected={activeTab === "candidates"}
+                className="workspace-tab"
+                id="workspace-tab-candidates"
+                onClick={() => switchWorkspaceTab("candidates")}
+                onKeyDown={handleWorkspaceTabKeyDown}
+                ref={candidateTabRef}
+                role="tab"
+                tabIndex={activeTab === "candidates" ? 0 : -1}
+                type="button"
               >
-                {logs.map((entry) => (
-                  <div className={`log-line log-${entry.tone}`} key={entry.id}>
-                    {entry.text}
-                  </div>
-                ))}
-              </div>
+                <span>Shortlist</span>
+                <strong>{candidates.length}</strong>
+              </button>
+              <button
+                aria-controls="workspace-panel-logs"
+                aria-selected={activeTab === "logs"}
+                className="workspace-tab"
+                id="workspace-tab-logs"
+                onClick={() => switchWorkspaceTab("logs")}
+                onKeyDown={handleWorkspaceTabKeyDown}
+                ref={logTabRef}
+                role="tab"
+                tabIndex={activeTab === "logs" ? 0 : -1}
+                type="button"
+              >
+                <span>Transcript</span>
+                <strong>{unreadLogCount > 0 ? `+${Math.min(unreadLogCount, 99)}` : logs.length}</strong>
+              </button>
             </div>
+
+            <section
+              aria-labelledby="workspace-tab-candidates"
+              className="panel candidate-panel workspace-panel"
+              hidden={activeTab !== "candidates"}
+              id="workspace-panel-candidates"
+              role="tabpanel"
+            >
+              <div className="panel-heading">
+                <div>
+                  <p className="panel-kicker">Archive Review</p>
+                  <h2>Candidate shortlist</h2>
+                </div>
+                <div className="mini-stats">
+                  <span>{candidates.length} found</span>
+                  <span>{selectedCount} selected</span>
+                </div>
+              </div>
+              <p className="panel-intro">
+                Treat this as a catalog table, not a download bucket. Review each folder, then mark
+                the ones that deserve a place in your Codex profile.
+              </p>
+              <div className="workspace-focus-note">
+                <span>Review mode</span>
+                <p>{shortlistHint}</p>
+              </div>
+
+              <div className="candidate-stage">
+                {candidates.length === 0 ? (
+                  <div className="empty-state">
+                    <p>Shortlist is empty.</p>
+                    <span>Run inspect to scan the repository archive for folders that ship with `SKILL.md`.</span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="candidate-toolbar">
+                      <p>Inspect first, then mark only the candidates that belong in your vault.</p>
+                      <div className="candidate-toolbar-actions">
+                        <button
+                          className="ghost-button candidate-toolbar-button"
+                          disabled={busy}
+                          onClick={selectAllCandidates}
+                          type="button"
+                        >
+                          Select all
+                        </button>
+                        <button
+                          className="ghost-button candidate-toolbar-button"
+                          disabled={busy || selectedCount === 0}
+                          onClick={clearSelectedCandidates}
+                          type="button"
+                        >
+                          Clear selection
+                        </button>
+                      </div>
+                    </div>
+                    <ul className="candidate-list">
+                      {candidates.map((candidate, index) => {
+                        const checked = selectedPaths.includes(candidate.path);
+                        return (
+                          <li className={`candidate-card ${checked ? "candidate-card-selected" : ""}`} key={candidate.path}>
+                            <label className="candidate-toggle">
+                              <div className="candidate-index-rail">
+                                <span className="candidate-index">{String(index + 1).padStart(2, "0")}</span>
+                                <input
+                                  checked={checked}
+                                  disabled={busy}
+                                  onChange={() => toggleCandidate(candidate.path)}
+                                  type="checkbox"
+                                />
+                              </div>
+                              <div className="candidate-copy">
+                                <div className="candidate-header">
+                                  <strong>{candidate.name}</strong>
+                                  <span className="candidate-chip">{checked ? "Queued" : "Available"}</span>
+                                </div>
+                                <code className="candidate-path">{candidate.path}</code>
+                                {candidate.description ? (
+                                  <span className="candidate-description">{candidate.description}</span>
+                                ) : null}
+                              </div>
+                            </label>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </>
+                )}
+              </div>
+            </section>
+
+            <section
+              aria-labelledby="workspace-tab-logs"
+              className="panel log-panel workspace-panel"
+              hidden={activeTab !== "logs"}
+              id="workspace-panel-logs"
+              role="tabpanel"
+            >
+              <div className="panel-heading">
+                <div>
+                  <p className="panel-kicker">Session Transcript</p>
+                  <h2>Logs & outcomes</h2>
+                </div>
+                {result ? (
+                  <div className="mini-stats">
+                    <span>{result.installedCount} installed</span>
+                    <span>{result.skippedCount} skipped</span>
+                    <span>{result.failedCount} failed</span>
+                  </div>
+                ) : null}
+              </div>
+              <p className="panel-intro">
+                Every inspection and install event is written into the ledger below so you can verify
+                what happened without guessing.
+              </p>
+              <div className="workspace-focus-note workspace-focus-note-ledger">
+                <span>Ledger focus</span>
+                <p>{transcriptHint}</p>
+              </div>
+
+              <div className="log-stage">
+                <div className="log-ledger">
+                  <div
+                    aria-live="polite"
+                    aria-busy={busy}
+                    className="log-viewport"
+                    ref={logViewportRef}
+                    role="status"
+                  >
+                    {logs.map((entry) => (
+                      <div className={`log-line log-${entry.tone}`} key={entry.id}>
+                        {entry.text}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </section>
           </section>
         </section>
       </main>
