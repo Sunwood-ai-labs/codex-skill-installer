@@ -74,4 +74,5 @@ Remote: `https://github.com/Sunwood-ai-labs/codex-skill-installer`
 
 - The desktop app dependency set was aligned from React 19 to React 18 because `vitepress` currently brings `@docsearch/react@3.8.2`, whose peer range is `< 19`.
 - The lockfile was regenerated with npm 10 to match the Node 22 GitHub Actions environment used by `build-desktop`.
+- GitHub Actions workflow references were advanced to current official majors for `actions/checkout`, `actions/setup-node`, and `actions/upload-artifact` to avoid the Node 20 deprecation path on hosted runners.
 - GitHub Pages is enabled for workflow-based publishing, but the docs workflow still cannot be dispatched from this branch until the workflow file exists on the default branch (`main`) or the default branch is changed.
