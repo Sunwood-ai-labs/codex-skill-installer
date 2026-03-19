@@ -1,7 +1,7 @@
 :root {
-  --display-font: "Yu Mincho", "Hiragino Mincho ProN", "Georgia", serif;
-  --body-font: "Aptos", "Segoe UI Variable Text", "Yu Gothic UI", sans-serif;
-  --mono-font: "Cascadia Code", "Consolas", monospace;
+  --display-font: "Yu Gothic UI", "Yu Gothic", "Hiragino Sans", "Meiryo", "Segoe UI Variable Text", sans-serif;
+  --body-font: "Yu Gothic UI", "Yu Gothic", "Hiragino Sans", "Meiryo", "Segoe UI Variable Text", sans-serif;
+  --mono-font: "Cascadia Mono", "Cascadia Code", "Consolas", monospace;
   --paper: #f3ebdf;
   --paper-panel: #fbf6ee;
   --paper-soft: #f4ece0;
@@ -48,10 +48,50 @@ body {
   min-height: 100dvh;
   color: var(--ink);
   font-family: var(--body-font);
+  line-height: 1.5;
   background:
     radial-gradient(circle at top left, rgba(164, 94, 55, 0.16), transparent 24%),
     radial-gradient(circle at right 10%, rgba(52, 94, 85, 0.12), transparent 30%),
     linear-gradient(180deg, #efe6d7 0%, #eadfce 53%, #f4ecdf 100%);
+}
+
+html[lang="ja"] {
+  font-feature-settings: "palt" 1;
+}
+
+html[lang="ja"] .titlebar-subtitle,
+html[lang="ja"] .eyebrow,
+html[lang="ja"] .panel-kicker,
+html[lang="ja"] .titlebar-chip,
+html[lang="ja"] .titlebar-locale-caption,
+html[lang="ja"] .hero-stamp,
+html[lang="ja"] .panel-tag,
+html[lang="ja"] .mini-stats span,
+html[lang="ja"] .workspace-header-metrics span,
+html[lang="ja"] .app-tab span,
+html[lang="ja"] .workspace-tab span,
+html[lang="ja"] .workspace-focus-note span,
+html[lang="ja"] .status-pill,
+html[lang="ja"] .status-kicker,
+html[lang="ja"] .status-metric span,
+html[lang="ja"] .control-fieldnote-label {
+  letter-spacing: 0.06em;
+  text-transform: none;
+}
+
+html[lang="ja"] .titlebar-title,
+html[lang="ja"] .hero-copy h1,
+html[lang="ja"] .workspace-header h1,
+html[lang="ja"] .setup-copy h2,
+html[lang="ja"] .panel-heading h2,
+html[lang="ja"] .dialog-card h3,
+html[lang="ja"] .setup-copy .rundown-card h3,
+html[lang="ja"] .status-lead,
+html[lang="ja"] .status-metric strong,
+html[lang="ja"] .workspace-overview h2 {
+  font-family: var(--display-font);
+  font-weight: 700;
+  letter-spacing: 0.01em;
 }
 
 button,
