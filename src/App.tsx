@@ -26,6 +26,24 @@ type FieldErrors = {
 
 type WindowAction = (appWindow: ReturnType<typeof getCurrentWindow>) => Promise<void>;
 
+const WORKFLOW_STEPS = [
+  {
+    code: "01",
+    title: "Inspect the archive",
+    detail: "Pull the GitHub repository and find every folder that actually ships with SKILL.md.",
+  },
+  {
+    code: "02",
+    title: "Mark the shortlist",
+    detail: "Review each candidate instead of mass-installing everything the repository happens to contain.",
+  },
+  {
+    code: "03",
+    title: "Install to your vault",
+    detail: "Write the chosen skills into your Codex profile and keep an explicit session log of the run.",
+  },
+] as const;
+
 function nextLogId(): number {
   return Date.now() + Math.floor(Math.random() * 1000);
 }
@@ -449,8 +467,13 @@ export default function App() {
   const maximizeControlLabel = isWindowMaximized ? "Restore window" : "Maximize window";
   const titlebarStatusLabel = busy ? "Working" : isWindowMaximized ? "Maximized" : "Ready";
   const titlebarSelectionLabel = hasCandidateSelection
-    ? `${selectedCount} of ${candidates.length} selected`
-    : "Inspect to build a shortlist";
+    ? `${selectedCount} marked for install`
+    : "No shortlist yet";
+  const sessionSummary = result ? result.summary : latestStatus;
+  const installLedgerLabel = result
+    ? `${result.installedCount} installed / ${result.skippedCount} skipped / ${result.failedCount} failed`
+    : "No install run in this session";
+  const destinationSummary = destination.trim() || "Resolving default target";
 
   return (
     <div className="app-shell">
@@ -466,7 +489,7 @@ export default function App() {
                   Codex Skill Installer
                 </p>
                 <p className="titlebar-subtitle" data-tauri-drag-region>
-                  Tauri 2 desktop workspace
+                  Editorial vault control
                 </p>
               </div>
             </div>
@@ -548,25 +571,65 @@ export default function App() {
       <main className="workspace">
         <section className="hero-panel">
           <div className="hero-copy">
-            <p className="eyebrow">Tauri 2 Desktop</p>
-            <h1>Codex Skill Installer</h1>
+            <div className="hero-banner">
+              <p className="eyebrow">Field Manual 01</p>
+              <span className="hero-stamp">Curated desktop installer</span>
+            </div>
+            <h1>Curate skills before they enter your local vault.</h1>
             <p className="hero-text">
-              Inspect GitHub skill repositories, review the `SKILL.md` folders you actually want,
-              and install them into your local Codex profile without hauling an Electron-sized
-              runtime around.
+              This app is not a bulk importer. It is a selection desk for GitHub-hosted Codex
+              skills: inspect first, mark only the folders that belong in your working set, then
+              install with a traceable session log.
             </p>
+            <div className="hero-rundown">
+              {WORKFLOW_STEPS.map((step) => (
+                <article className="rundown-card" key={step.code}>
+                  <span className="rundown-index">{step.code}</span>
+                  <div>
+                    <h2>{step.title}</h2>
+                    <p>{step.detail}</p>
+                  </div>
+                </article>
+              ))}
+            </div>
           </div>
 
           <div className="hero-status">
-            <span className={`status-pill ${busy ? "status-pill-busy" : ""}`}>
-              {busy ? "Working" : "Ready"}
-            </span>
-            <p>{latestStatus}</p>
-            <span className="status-caption">
-              {hasCandidateSelection
-                ? `${selectedCount} of ${candidates.length} candidates selected`
-                : "Inspect a repository to review candidates before install"}
-            </span>
+            <div className="status-header">
+              <span className={`status-pill ${busy ? "status-pill-busy" : ""}`}>
+                {busy ? "Working" : "Ready"}
+              </span>
+              <p className="status-kicker">Session ledger</p>
+            </div>
+            <p className="status-lead">{sessionSummary}</p>
+            <div className="status-grid">
+              <div className="status-metric">
+                <span>Candidates</span>
+                <strong>{candidates.length}</strong>
+              </div>
+              <div className="status-metric">
+                <span>Marked</span>
+                <strong>{selectedCount}</strong>
+              </div>
+              <div className="status-metric">
+                <span>Window</span>
+                <strong>{isWindowMaximized ? "max" : "std"}</strong>
+              </div>
+            </div>
+            <dl className="status-notes">
+              <div>
+                <dt>Runtime</dt>
+                <dd>Tauri 2 with a Rust host</dd>
+              </div>
+              <div>
+                <dt>Target</dt>
+                <dd>{destinationSummary}</dd>
+              </div>
+              <div>
+                <dt>Ledger</dt>
+                <dd>{installLedgerLabel}</dd>
+              </div>
+            </dl>
           </div>
         </section>
 
@@ -574,11 +637,16 @@ export default function App() {
           <section className="panel form-panel">
             <div className="panel-heading">
               <div>
-                <p className="panel-kicker">Repository Input</p>
-                <h2>Source & install target</h2>
+                <p className="panel-kicker">Acquisition Desk</p>
+                <h2>Source repository & local target</h2>
               </div>
-              <span className="panel-tag">WebView + Rust core</span>
+              <span className="panel-tag">Source / destination</span>
             </div>
+            <p className="panel-intro">
+              Start with a repository, tree, or blob URL. The installer will inspect the archive,
+              expose only valid skill folders, and keep existing installs untouched unless you
+              explicitly allow overwrite.
+            </p>
 
             <label className="field" htmlFor="repository-url">
               <span>GitHub URL</span>
@@ -701,24 +769,28 @@ export default function App() {
           <section className="panel candidate-panel">
             <div className="panel-heading">
               <div>
-                <p className="panel-kicker">Detected Skills</p>
-                <h2>Candidate checklist</h2>
+                <p className="panel-kicker">Archive Review</p>
+                <h2>Candidate shortlist</h2>
               </div>
               <div className="mini-stats">
                 <span>{candidates.length} found</span>
                 <span>{selectedCount} selected</span>
               </div>
             </div>
+            <p className="panel-intro">
+              Treat this as a catalog table, not a download bucket. Review each folder, then mark
+              the ones that deserve a place in your Codex profile.
+            </p>
 
             {candidates.length === 0 ? (
               <div className="empty-state">
-                <p>No candidates yet.</p>
-                <span>Run inspect to scan the repository for `SKILL.md` folders.</span>
+                <p>Shortlist is empty.</p>
+                <span>Run inspect to scan the repository archive for folders that ship with `SKILL.md`.</span>
               </div>
             ) : (
               <>
                 <div className="candidate-toolbar">
-                  <p>Review the list first, then choose only the skills you want to install.</p>
+                  <p>Inspect first, then mark only the candidates that belong in your vault.</p>
                   <div className="candidate-toolbar-actions">
                     <button
                       className="ghost-button candidate-toolbar-button"
@@ -739,19 +811,25 @@ export default function App() {
                   </div>
                 </div>
                 <ul className="candidate-list">
-                  {candidates.map((candidate) => {
+                  {candidates.map((candidate, index) => {
                     const checked = selectedPaths.includes(candidate.path);
                     return (
-                      <li className="candidate-card" key={candidate.path}>
+                      <li className={`candidate-card ${checked ? "candidate-card-selected" : ""}`} key={candidate.path}>
                         <label className="candidate-toggle">
-                          <input
-                            checked={checked}
-                            disabled={busy}
-                            onChange={() => toggleCandidate(candidate.path)}
-                            type="checkbox"
-                          />
+                          <div className="candidate-index-rail">
+                            <span className="candidate-index">{String(index + 1).padStart(2, "0")}</span>
+                            <input
+                              checked={checked}
+                              disabled={busy}
+                              onChange={() => toggleCandidate(candidate.path)}
+                              type="checkbox"
+                            />
+                          </div>
                           <div className="candidate-copy">
-                            <strong>{candidate.name}</strong>
+                            <div className="candidate-header">
+                              <strong>{candidate.name}</strong>
+                              <span className="candidate-chip">{checked ? "Queued" : "Available"}</span>
+                            </div>
                             <code className="candidate-path">{candidate.path}</code>
                             {candidate.description ? (
                               <span className="candidate-description">{candidate.description}</span>
@@ -769,7 +847,7 @@ export default function App() {
           <section className="panel log-panel">
             <div className="panel-heading">
               <div>
-                <p className="panel-kicker">Status Feed</p>
+                <p className="panel-kicker">Session Transcript</p>
                 <h2>Logs & outcomes</h2>
               </div>
               {result ? (
@@ -780,19 +858,25 @@ export default function App() {
                 </div>
               ) : null}
             </div>
+            <p className="panel-intro">
+              Every inspection and install event is written into the ledger below so you can verify
+              what happened without guessing.
+            </p>
 
-            <div
-              aria-live="polite"
-              aria-busy={busy}
-              className="log-viewport"
-              ref={logViewportRef}
-              role="status"
-            >
-              {logs.map((entry) => (
-                <div className={`log-line log-${entry.tone}`} key={entry.id}>
-                  {entry.text}
-                </div>
-              ))}
+            <div className="log-ledger">
+              <div
+                aria-live="polite"
+                aria-busy={busy}
+                className="log-viewport"
+                ref={logViewportRef}
+                role="status"
+              >
+                {logs.map((entry) => (
+                  <div className={`log-line log-${entry.tone}`} key={entry.id}>
+                    {entry.text}
+                  </div>
+                ))}
+              </div>
             </div>
           </section>
         </section>
