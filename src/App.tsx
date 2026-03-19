@@ -8,20 +8,29 @@ import {
   installSkills,
   pickDestination,
 } from "./lib/api";
+import {
+  detectInitialLocale,
+  formatInstallSummary,
+  formatOutcomeLine,
+  formatTaggedLog,
+  getUiCopy,
+  localizeServiceMessage,
+  persistLocale,
+  resolveFieldError,
+  toDisplayErrorMessage,
+} from "./lib/i18n";
+import type { BusyState, FieldErrorKey, Locale } from "./lib/i18n";
 import type {
   AppDialog,
-  InstallOutcome,
   LogEntry,
   LogTone,
   SkillCandidate,
   SkillInstallResult,
 } from "./lib/types";
 
-const READY_TEXT = "Ready.";
-
 type FieldErrors = {
-  destination: string | null;
-  repositoryUrl: string | null;
+  destination: FieldErrorKey | null;
+  repositoryUrl: FieldErrorKey | null;
 };
 
 type WorkspaceTab = "setup" | "candidates" | "logs";
@@ -29,24 +38,7 @@ type WorkspaceTab = "setup" | "candidates" | "logs";
 type WindowAction = (appWindow: ReturnType<typeof getCurrentWindow>) => Promise<void>;
 
 const MAX_LOG_ENTRIES = 250;
-
-const WORKFLOW_STEPS = [
-  {
-    code: "01",
-    title: "Inspect the archive",
-    detail: "Pull the GitHub repository and find every folder that actually ships with SKILL.md.",
-  },
-  {
-    code: "02",
-    title: "Mark the shortlist",
-    detail: "Review each candidate instead of mass-installing everything the repository happens to contain.",
-  },
-  {
-    code: "03",
-    title: "Install to your vault",
-    detail: "Write the chosen skills into your Codex profile and keep an explicit session log of the run.",
-  },
-] as const;
+const INITIAL_LOCALE = detectInitialLocale();
 
 function nextLogId(): number {
   return Date.now() + Math.floor(Math.random() * 1000);
@@ -65,29 +57,14 @@ function isGithubUrl(value: string): boolean {
   }
 }
 
-function toErrorMessage(error: unknown): string {
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-  if (typeof error === "string" && error.trim()) {
-    return error;
-  }
-  return "Unexpected error.";
-}
-
-function formatOutcome(outcome: InstallOutcome): string {
-  const statusLabel = outcome.installed ? "installed" : outcome.skipped ? "skipped" : "failed";
-  return `${statusLabel.padEnd(8, " ")} ${outcome.candidate.name} -> ${outcome.destination} (${outcome.message})`;
-}
-
 function validateInputFields(repositoryUrl: string, destination: string): FieldErrors {
   return {
     repositoryUrl: !repositoryUrl.trim()
-      ? "Repository URL is required."
+      ? "repositoryRequired"
       : !isGithubUrl(repositoryUrl)
-        ? "Repository URL must be a valid GitHub URL."
+        ? "repositoryInvalid"
         : null,
-    destination: !destination.trim() ? "Destination directory is required." : null,
+    destination: !destination.trim() ? "destinationRequired" : null,
   };
 }
 
@@ -105,8 +82,9 @@ export default function App() {
   const [refValue, setRefValue] = useState("");
   const [destination, setDestination] = useState("");
   const [overwrite, setOverwrite] = useState(false);
+  const [locale, setLocale] = useState<Locale>(INITIAL_LOCALE);
   const [busy, setBusy] = useState(false);
-  const [busyLabel, setBusyLabel] = useState(READY_TEXT);
+  const [busyState, setBusyState] = useState<BusyState>("ready");
   const [candidates, setCandidates] = useState<SkillCandidate[]>([]);
   const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
   const [result, setResult] = useState<SkillInstallResult | null>(null);
@@ -120,10 +98,10 @@ export default function App() {
     {
       id: nextLogId(),
       tone: "info",
-      text: READY_TEXT,
+      text: getUiCopy(INITIAL_LOCALE).logs.ready,
     },
   ]);
-  const [liveMessage, setLiveMessage] = useState(READY_TEXT);
+  const [liveMessage, setLiveMessage] = useState<string>(getUiCopy(INITIAL_LOCALE).logs.ready);
   const [unreadLogCount, setUnreadLogCount] = useState(0);
   const [isWindowMaximized, setIsWindowMaximized] = useState(false);
   const logViewportRef = useRef<HTMLDivElement | null>(null);
@@ -137,6 +115,8 @@ export default function App() {
   const logTabRef = useRef<HTMLButtonElement | null>(null);
   const repositoryHelpId = useId();
   const destinationHelpId = useId();
+  const copy = getUiCopy(locale);
+  const busyLabel = copy.busyState[busyState];
 
   function switchWorkspaceTab(nextTab: WorkspaceTab, options?: { focusTab?: boolean }): void {
     setActiveTab(nextTab);
@@ -168,6 +148,15 @@ export default function App() {
     });
     setLiveMessage(text);
     setUnreadLogCount((current) => (activeTab === "logs" ? 0 : current + 1));
+  }
+
+  function appendTaggedLog(tone: LogTone, message: string): void {
+    const tagTone = tone === "success" ? "success" : tone;
+    appendLog(tone, formatTaggedLog(locale, tagTone, message));
+  }
+
+  function setLanguage(nextLocale: Locale): void {
+    setLocale(nextLocale);
   }
 
   function invalidateWorkspaceResults(): void {
@@ -220,7 +209,7 @@ export default function App() {
       ? document.activeElement
       : null;
     setDialog({ tone, title, message });
-    setLiveMessage(`${title}. ${message}`);
+    setLiveMessage(locale === "ja" ? `${title}。 ${message}` : `${title}. ${message}`);
     if (tone === "error") {
       switchWorkspaceTab("logs");
     }
@@ -234,9 +223,9 @@ export default function App() {
     try {
       await action(getCurrentWindow());
     } catch (error) {
-      const message = toErrorMessage(error);
-      appendLog("error", `[ERROR] ${message}`);
-      openDialog("error", "Window controls failed", message);
+      const message = toDisplayErrorMessage(error, locale);
+      appendTaggedLog("error", message);
+      openDialog("error", copy.windowControls.failedTitle, message);
     }
   }
 
@@ -245,14 +234,14 @@ export default function App() {
 
     void (async () => {
       try {
-        const defaultDestination = await fetchDefaultDestination();
+        const defaultDestination = await fetchDefaultDestination(locale);
         if (!cancelled) {
           setDestination(defaultDestination);
         }
       } catch (error) {
-        const message = toErrorMessage(error);
+        const message = toDisplayErrorMessage(error, locale);
         if (!cancelled) {
-          appendLog("warn", `[WARN] ${message}`);
+          appendTaggedLog("warn", message);
         }
       }
     })();
@@ -260,7 +249,11 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [locale]);
+
+  useEffect(() => {
+    persistLocale(locale);
+  }, [locale]);
 
   useEffect(() => {
     const viewport = logViewportRef.current;
@@ -342,7 +335,10 @@ export default function App() {
         }
       } catch (error) {
         if (isMounted) {
-          appendLog("warn", `[WARN] Window state could not be read. ${toErrorMessage(error)}`);
+          appendTaggedLog(
+            "warn",
+            `${copy.logs.windowStateReadFailed} ${toDisplayErrorMessage(error, locale)}`,
+          );
         }
       }
     }
@@ -362,7 +358,7 @@ export default function App() {
 
   async function handleBrowse(): Promise<void> {
     try {
-      const picked = await pickDestination();
+      const picked = await pickDestination(locale);
       if (picked) {
         if (picked !== destination) {
           invalidateWorkspaceResults();
@@ -371,9 +367,9 @@ export default function App() {
         handleFieldValidation("destination", picked);
       }
     } catch (error) {
-      const message = toErrorMessage(error);
-      appendLog("error", `[ERROR] ${message}`);
-      openDialog("error", "Folder picker failed", message);
+      const message = toDisplayErrorMessage(error, locale);
+      appendTaggedLog("error", message);
+      openDialog("error", copy.dialogs.folderPickerFailed, message);
     }
   }
 
@@ -381,70 +377,70 @@ export default function App() {
     const nextErrors = validateInputFields(repositoryUrl, destination);
     setFieldErrors(nextErrors);
     if (hasErrors(nextErrors)) {
-      appendLog(
-        "warn",
-        `[WARN] ${[nextErrors.repositoryUrl, nextErrors.destination].filter(Boolean).join("; ")}`,
-      );
+      const localizedErrors = [nextErrors.repositoryUrl, nextErrors.destination]
+        .map((item) => resolveFieldError(locale, item))
+        .filter((item): item is string => Boolean(item));
+      appendTaggedLog("warn", localizedErrors.join(locale === "ja" ? " / " : "; "));
       focusFirstErroredField(nextErrors);
       return;
     }
 
     setBusy(true);
-    setBusyLabel("Inspecting repository...");
-    setLiveMessage("Inspecting repository.");
+    setBusyState("inspecting");
+    setLiveMessage(copy.busyState.inspecting);
     setResult(null);
-    appendLog("info", "Inspecting repository...");
+    appendTaggedLog("info", copy.busyState.inspecting);
 
     try {
-      const inspectResult = await inspectRepository(repositoryUrl, refValue);
+      const inspectResult = await inspectRepository(repositoryUrl, refValue, locale);
       setCandidates(inspectResult.candidates);
       setSelectedPaths([]);
 
       for (const line of inspectResult.logs) {
-        appendLog("info", `[INFO] ${line}`);
+        appendTaggedLog("info", localizeServiceMessage(line, locale));
       }
 
       if (inspectResult.candidates.length === 0) {
-        appendLog("info", "No candidates detected.");
+        appendTaggedLog("info", copy.logs.noCandidates);
         switchWorkspaceTab("setup");
       } else {
-        appendLog("info", "Review the detected skills, then choose which ones to install.");
+        appendTaggedLog("info", copy.logs.reviewDetected);
         switchWorkspaceTab("candidates");
       }
     } catch (error) {
-      const message = toErrorMessage(error);
-      appendLog("error", `[ERROR] ${message}`);
-      openDialog("error", "Inspection failed", message);
+      const message = toDisplayErrorMessage(error, locale);
+      appendTaggedLog("error", message);
+      openDialog("error", copy.dialogs.inspectionFailed, message);
     } finally {
       setBusy(false);
-      setBusyLabel(READY_TEXT);
+      setBusyState("ready");
     }
   }
 
   async function handleInstall(): Promise<void> {
     const chosen = selectedPaths.filter((path) => path.trim().length > 0);
     if (chosen.length === 0) {
-      appendLog("warn", "No skill candidates selected.");
-      openDialog("warn", "Nothing selected", "Please select at least one candidate.");
+      appendTaggedLog("warn", copy.logs.noSelection);
+      openDialog("warn", copy.dialogs.nothingSelected, copy.dialogs.pleaseSelectAtLeastOneCandidate);
       return;
     }
 
     const nextErrors = validateInputFields(repositoryUrl, destination);
     setFieldErrors(nextErrors);
     if (hasErrors(nextErrors)) {
-      appendLog(
-        "warn",
-        `[WARN] ${[nextErrors.repositoryUrl, nextErrors.destination].filter(Boolean).join("; ")}`,
-      );
+      const localizedErrors = [nextErrors.repositoryUrl, nextErrors.destination]
+        .map((item) => resolveFieldError(locale, item))
+        .filter((item): item is string => Boolean(item));
+      appendTaggedLog("warn", localizedErrors.join(locale === "ja" ? " / " : "; "));
       focusFirstErroredField(nextErrors);
       return;
     }
 
     setBusy(true);
-    setBusyLabel("Installing selected skills...");
-    setLiveMessage("Installing selected skills.");
+    setBusyState("installing");
+    setLiveMessage(copy.busyState.installing);
     switchWorkspaceTab("logs");
-    appendLog("info", "Installing selected skills...");
+    appendTaggedLog("info", copy.busyState.installing);
 
     try {
       const installResult = await installSkills(
@@ -453,33 +449,35 @@ export default function App() {
         destination,
         overwrite,
         refValue,
+        locale,
       );
       setResult(installResult);
-      appendLog(installResult.ok ? "success" : "error", installResult.summary);
+      const localizedSummary = formatInstallSummary(locale, installResult);
+      appendLog(installResult.ok ? "success" : "error", localizedSummary);
 
       for (const outcome of installResult.outcomes) {
         appendLog(
           outcome.installed ? "success" : outcome.skipped ? "warn" : "error",
-          formatOutcome(outcome),
+          formatOutcomeLine(locale, outcome),
         );
       }
 
       for (const line of installResult.logs) {
-        appendLog("info", `[INFO] ${line}`);
+        appendTaggedLog("info", localizeServiceMessage(line, locale));
       }
 
       if (installResult.ok) {
-        openDialog("info", "Install completed", installResult.summary);
+        openDialog("info", copy.dialogs.installCompleted, localizedSummary);
       } else {
-        openDialog("error", "Install failed", installResult.summary);
+        openDialog("error", copy.dialogs.installFailed, localizedSummary);
       }
     } catch (error) {
-      const message = toErrorMessage(error);
-      appendLog("error", `[ERROR] ${message}`);
-      openDialog("error", "Install failed", message);
+      const message = toDisplayErrorMessage(error, locale);
+      appendTaggedLog("error", message);
+      openDialog("error", copy.dialogs.installFailed, message);
     } finally {
       setBusy(false);
-      setBusyLabel(READY_TEXT);
+      setBusyState("ready");
     }
   }
 
@@ -488,7 +486,7 @@ export default function App() {
     setSelectedPaths([]);
     setResult(null);
     switchWorkspaceTab("setup");
-    appendLog("info", "Candidate list cleared.");
+    appendTaggedLog("info", copy.logs.candidateCleared);
   }
 
   function toggleCandidate(path: string): void {
@@ -545,44 +543,42 @@ export default function App() {
   }
 
   const selectedCount = selectedPaths.length;
-  const latestStatus = busy ? busyLabel : logs.at(-1)?.text ?? READY_TEXT;
   const repositoryUrlInvalid = Boolean(fieldErrors.repositoryUrl);
   const destinationInvalid = Boolean(fieldErrors.destination);
   const hasCandidateSelection = candidates.length > 0;
-  const maximizeControlLabel = isWindowMaximized ? "Restore window" : "Maximize window";
-  const titlebarStatusLabel = busy ? "Working" : isWindowMaximized ? "Maximized" : "Ready";
+  const maximizeControlLabel = isWindowMaximized
+    ? copy.windowControls.restore
+    : copy.windowControls.maximize;
+  const maximizeControlTitle = isWindowMaximized
+    ? copy.windowControls.restoreTitle
+    : copy.windowControls.maximizeTitle;
+  const titlebarStatusLabel = busy ? busyLabel : isWindowMaximized ? copy.titlebar.maximized : copy.busyState.ready;
   const titlebarSelectionLabel = hasCandidateSelection
-    ? `${selectedCount} marked for install`
-    : "No shortlist yet";
-  const sessionSummary = result ? result.summary : latestStatus;
-  const installLedgerLabel = result
-    ? `${result.installedCount} installed / ${result.skippedCount} skipped / ${result.failedCount} failed`
-    : "No install run in this session";
-  const destinationSummary = destination.trim() || "Resolving default target";
-  const setupHint = "Lock the source and destination first. Once those are stable, move to the shortlist tab.";
+    ? copy.titlebar.selectionLabel(selectedCount)
+    : copy.titlebar.noShortlist;
   const shortlistHint = candidates.length === 0
-    ? "Run inspect to build the shortlist."
+    ? copy.shortlist.hints.empty
     : selectedCount === 0
-      ? "Review each detected folder before you queue it."
-      : `${selectedCount} folders are marked and ready for install review.`;
+      ? copy.shortlist.hints.noneSelected
+      : copy.shortlist.hints.selected(selectedCount);
   const transcriptHint = busy
-    ? "The ledger is active. Keep this view open while the installer writes."
+    ? copy.transcript.hints.busy
     : result
-      ? "Audit the final outcomes before you close the session."
-      : "The ledger stays quiet until inspection or install starts.";
+      ? copy.transcript.hints.result
+      : copy.transcript.hints.idle;
   const workspaceTitle = activeTab === "setup"
-    ? "Setup desk"
+    ? copy.workspace.setupTitle
     : activeTab === "candidates"
-      ? "Shortlist review"
-      : "Session transcript";
+      ? copy.workspace.candidatesTitle
+      : copy.workspace.logsTitle;
   const workspaceCopy = activeTab === "setup"
-    ? "Desktop flow starts here. Confirm the repository and destination before you open the shortlist."
+    ? copy.workspace.setupCopy
     : activeTab === "candidates"
-      ? "Keep the list tight and deliberate. The shortlist should feel curated, not dumped onto one long page."
-      : "Treat the ledger as a control room. Every inspect and install event stays in reach while you work.";
+      ? copy.workspace.candidatesCopy
+      : copy.workspace.logsCopy;
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-active-tab={activeTab}>
       <header className="custom-titlebar">
         <div className="custom-titlebar-inner">
           <div className="titlebar-drag-region" data-tauri-drag-region role="presentation">
@@ -592,10 +588,10 @@ export default function App() {
               </span>
               <div className="titlebar-label-group" data-tauri-drag-region>
                 <p className="titlebar-title" data-tauri-drag-region>
-                  Codex Skill Installer
+                  {copy.appTitle}
                 </p>
                 <p className="titlebar-subtitle" data-tauri-drag-region>
-                  Editorial vault control
+                  {copy.titlebarSubtitle}
                 </p>
               </div>
             </div>
@@ -610,9 +606,25 @@ export default function App() {
             </div>
           </div>
 
-          <div aria-label="Window controls" className="titlebar-controls" role="toolbar">
+          <div className="titlebar-utility">
+            <div aria-label={copy.languageLabel} className="titlebar-locale-switch" role="group">
+              <span className="titlebar-locale-caption">{copy.languageLabel}</span>
+              {(["en", "ja"] as const).map((option) => (
+                <button
+                  aria-pressed={locale === option}
+                  className={`titlebar-locale-button ${locale === option ? "titlebar-locale-button-active" : ""}`}
+                  key={option}
+                  onClick={() => setLanguage(option)}
+                  type="button"
+                >
+                  {copy.localeOptions[option]}
+                </button>
+              ))}
+            </div>
+
+            <div aria-label={copy.windowControls.toolbar} className="titlebar-controls" role="toolbar">
             <button
-              aria-label="Minimize window"
+              aria-label={copy.windowControls.minimize}
               className="titlebar-control"
               disabled={!canManageWindow}
               onClick={() => {
@@ -620,7 +632,7 @@ export default function App() {
                   await appWindow.minimize();
                 });
               }}
-              title="Minimize"
+              title={copy.windowControls.minimizeTitle}
               type="button"
             >
               <span className="window-control-glyph window-control-glyph-minimize" aria-hidden="true" />
@@ -634,7 +646,7 @@ export default function App() {
                   await appWindow.toggleMaximize();
                 });
               }}
-              title={maximizeControlLabel}
+              title={maximizeControlTitle}
               type="button"
             >
               <span
@@ -647,7 +659,7 @@ export default function App() {
               />
             </button>
             <button
-              aria-label="Close window"
+              aria-label={copy.windowControls.close}
               className="titlebar-control titlebar-control-close"
               disabled={!canManageWindow}
               onClick={() => {
@@ -655,11 +667,12 @@ export default function App() {
                   await appWindow.close();
                 });
               }}
-              title="Close"
+              title={copy.windowControls.closeTitle}
               type="button"
             >
               <span className="window-control-glyph window-control-glyph-close" aria-hidden="true" />
             </button>
+          </div>
           </div>
         </div>
       </header>
@@ -677,19 +690,19 @@ export default function App() {
       <main className="workspace">
         <section className="workspace-header">
           <div>
-            <p className="eyebrow">Field Manual 01</p>
+            <p className="eyebrow">{copy.headerEyebrow}</p>
             <h1>{workspaceTitle}</h1>
             <p className="workspace-header-copy">{workspaceCopy}</p>
           </div>
           <div className="workspace-header-metrics">
-            <span>{busy ? "Working" : "Ready"}</span>
-            <span>{candidates.length} found</span>
-            <span>{selectedCount} marked</span>
-            <span>{logs.length} ledger lines</span>
+            <span>{busyLabel}</span>
+            <span>{copy.metrics.found(candidates.length)}</span>
+            <span>{copy.metrics.marked(selectedCount)}</span>
+            <span>{copy.metrics.ledgerLines(logs.length)}</span>
           </div>
         </section>
 
-        <div aria-label="Workspace sections" className="app-tabbar" role="tablist">
+        <div aria-label={copy.workspaceSectionsLabel} className="app-tabbar" role="tablist">
           <button
             aria-controls="workspace-panel-setup"
             aria-selected={activeTab === "setup"}
@@ -702,7 +715,7 @@ export default function App() {
             tabIndex={activeTab === "setup" ? 0 : -1}
             type="button"
           >
-            <span>Setup</span>
+            <span>{copy.tabs.setup}</span>
             <strong>01</strong>
           </button>
           <button
@@ -717,7 +730,7 @@ export default function App() {
             tabIndex={activeTab === "candidates" ? 0 : -1}
             type="button"
           >
-            <span>Shortlist</span>
+            <span>{copy.tabs.candidates}</span>
             <strong>{candidates.length}</strong>
           </button>
           <button
@@ -732,7 +745,7 @@ export default function App() {
             tabIndex={activeTab === "logs" ? 0 : -1}
             type="button"
           >
-            <span>Transcript</span>
+            <span>{copy.tabs.logs}</span>
             <strong>{unreadLogCount > 0 ? `+${Math.min(unreadLogCount, 99)}` : logs.length}</strong>
           </button>
         </div>
@@ -747,16 +760,13 @@ export default function App() {
           <div className="setup-grid">
             <section className="setup-copy">
               <div className="hero-banner">
-                <span className="hero-stamp">Curated desktop installer</span>
-                <span className="panel-tag">Source / destination</span>
+                <span className="hero-stamp">{copy.setup.heroStamp}</span>
+                <span className="panel-tag">{copy.setup.panelTag}</span>
               </div>
-              <h2>Curate skills before they enter your local vault.</h2>
-              <p className="panel-intro">
-                This app is not a bulk importer. Lock the repository and destination first, inspect
-                the archive next, then move to the shortlist tab only after the source is stable.
-              </p>
+              <h2>{copy.setup.title}</h2>
+              <p className="panel-intro">{copy.setup.intro}</p>
               <div className="hero-rundown">
-                {WORKFLOW_STEPS.map((step) => (
+                {copy.setup.steps.map((step) => (
                   <article className="rundown-card" key={step.code}>
                     <span className="rundown-index">{step.code}</span>
                     <div>
@@ -766,65 +776,19 @@ export default function App() {
                   </article>
                 ))}
               </div>
-              <div className="workspace-focus-note">
-                <span>Setup note</span>
-                <p>{setupHint}</p>
-              </div>
             </section>
-
-            <div className="hero-status setup-status">
-              <div className="status-header">
-                <span className={`status-pill ${busy ? "status-pill-busy" : ""}`}>
-                  {busy ? "Working" : "Ready"}
-                </span>
-                <p className="status-kicker">Session ledger</p>
-              </div>
-              <p className="status-lead">{sessionSummary}</p>
-              <div className="status-grid">
-                <div className="status-metric">
-                  <span>Candidates</span>
-                  <strong>{candidates.length}</strong>
-                </div>
-                <div className="status-metric">
-                  <span>Marked</span>
-                  <strong>{selectedCount}</strong>
-                </div>
-                <div className="status-metric">
-                  <span>Window</span>
-                  <strong>{isWindowMaximized ? "max" : "std"}</strong>
-                </div>
-              </div>
-              <dl className="status-notes">
-                <div>
-                  <dt>Runtime</dt>
-                  <dd>Tauri 2 with a Rust host</dd>
-                </div>
-                <div>
-                  <dt>Target</dt>
-                  <dd>{destinationSummary}</dd>
-                </div>
-                <div>
-                  <dt>Ledger</dt>
-                  <dd>{installLedgerLabel}</dd>
-                </div>
-              </dl>
-            </div>
 
             <section className="form-panel setup-form-panel">
               <div className="panel-heading">
                 <div>
-                  <p className="panel-kicker">Acquisition Desk</p>
-                  <h2>Source repository & local target</h2>
+                  <p className="panel-kicker">{copy.setup.panelKicker}</p>
+                  <h2>{copy.setup.panelTitle}</h2>
                 </div>
               </div>
-              <p className="panel-intro">
-                Start with a repository, tree, or blob URL. The installer will inspect the archive,
-                expose only valid skill folders, and keep existing installs untouched unless you
-                explicitly allow overwrite.
-              </p>
+              <p className="panel-intro">{copy.setup.panelIntro}</p>
 
               <label className="field" htmlFor="repository-url">
-                <span>GitHub URL</span>
+                <span>{copy.setup.repositoryLabel}</span>
                 <input
                   aria-describedby={repositoryHelpId}
                   aria-invalid={repositoryUrlInvalid}
@@ -840,116 +804,120 @@ export default function App() {
                     setRepositoryUrl(nextValue);
                     clearFieldError("repositoryUrl");
                   }}
-                  placeholder="https://github.com/owner/repo or /tree/ref/path"
+                  placeholder={copy.setup.repositoryPlaceholder}
                   ref={urlInputRef}
                   type="url"
                   value={repositoryUrl}
                 />
                 <span className={repositoryUrlInvalid ? "field-help field-help-error" : "field-help"} id={repositoryHelpId}>
-                  {fieldErrors.repositoryUrl ?? "Repository, tree, and blob URLs are supported."}
+                  {resolveFieldError(locale, fieldErrors.repositoryUrl) ?? copy.setup.repositoryHelp}
                 </span>
               </label>
 
-              <label className="field" htmlFor="ref-override">
-                <span>Ref override</span>
-                <input
-                  className="field-input"
-                  disabled={busy}
-                  id="ref-override"
-                  onChange={(event) => {
-                    const nextValue = event.target.value;
-                    if (nextValue !== refValue) {
-                      invalidateWorkspaceResults();
-                    }
-                    setRefValue(nextValue);
-                  }}
-                  placeholder="optional override"
-                  type="text"
-                  value={refValue}
-                />
-                <span className="field-help">Use this when you want to inspect a different branch or tag.</span>
-              </label>
-
-              <div className="field">
-                <label htmlFor="destination-input">
-                  <span>Install to</span>
-                </label>
-                <div className="destination-row">
+              <div className="setup-secondary-grid">
+                <label className="field" htmlFor="ref-override">
+                  <span>{copy.setup.refLabel}</span>
                   <input
-                    aria-describedby={destinationHelpId}
-                    aria-invalid={destinationInvalid}
-                    className={destinationInvalid ? "field-input field-input-invalid" : "field-input"}
+                    className="field-input"
                     disabled={busy}
-                    id="destination-input"
-                    onBlur={() => handleFieldValidation("destination", destination)}
+                    id="ref-override"
                     onChange={(event) => {
                       const nextValue = event.target.value;
-                      if (nextValue !== destination) {
+                      if (nextValue !== refValue) {
                         invalidateWorkspaceResults();
                       }
-                      setDestination(nextValue);
-                      clearFieldError("destination");
+                      setRefValue(nextValue);
                     }}
-                    placeholder="Choose a Codex skills directory"
-                    ref={destinationInputRef}
+                    placeholder={copy.setup.refPlaceholder}
                     type="text"
-                    value={destination}
+                    value={refValue}
                   />
+                  <span className="field-help">{copy.setup.refHelp}</span>
+                </label>
+
+                <div className="field">
+                  <label htmlFor="destination-input">
+                    <span>{copy.setup.destinationLabel}</span>
+                  </label>
+                  <div className="destination-row">
+                    <input
+                      aria-describedby={destinationHelpId}
+                      aria-invalid={destinationInvalid}
+                      className={destinationInvalid ? "field-input field-input-invalid" : "field-input"}
+                      disabled={busy}
+                      id="destination-input"
+                      onBlur={() => handleFieldValidation("destination", destination)}
+                      onChange={(event) => {
+                        const nextValue = event.target.value;
+                        if (nextValue !== destination) {
+                          invalidateWorkspaceResults();
+                        }
+                        setDestination(nextValue);
+                        clearFieldError("destination");
+                      }}
+                      placeholder={copy.setup.destinationPlaceholder}
+                      ref={destinationInputRef}
+                      type="text"
+                      value={destination}
+                    />
+                    <button
+                      className="ghost-button"
+                      disabled={busy}
+                      onClick={() => {
+                        void handleBrowse();
+                      }}
+                      type="button"
+                    >
+                      {copy.actions.browse}
+                    </button>
+                  </div>
+                  <span className={destinationInvalid ? "field-help field-help-error" : "field-help"} id={destinationHelpId}>
+                    {resolveFieldError(locale, fieldErrors.destination) ?? copy.setup.destinationHelp}
+                  </span>
+                </div>
+              </div>
+
+              <div className="setup-actions-row">
+                <label className="checkbox-field">
+                  <input
+                    checked={overwrite}
+                    disabled={busy}
+                    onChange={(event) => setOverwrite(event.target.checked)}
+                    type="checkbox"
+                  />
+                  <span>{copy.setup.overwriteLabel}</span>
+                </label>
+
+                <div className="button-row">
                   <button
-                    className="ghost-button"
+                    className="primary-button"
                     disabled={busy}
                     onClick={() => {
-                      void handleBrowse();
+                      void handleInspect();
                     }}
                     type="button"
                   >
-                    Browse
+                    {copy.actions.inspect}
+                  </button>
+                  <button
+                    className="secondary-action-button"
+                    disabled={busy || selectedCount === 0}
+                    onClick={() => {
+                      void handleInstall();
+                    }}
+                    type="button"
+                  >
+                    {copy.actions.installSelected}
+                  </button>
+                  <button
+                    className="ghost-button"
+                    disabled={busy}
+                    onClick={clearCandidates}
+                    type="button"
+                  >
+                    {copy.actions.clear}
                   </button>
                 </div>
-                <span className={destinationInvalid ? "field-help field-help-error" : "field-help"} id={destinationHelpId}>
-                  {fieldErrors.destination ?? "Defaults to your Codex skills directory when available."}
-                </span>
-              </div>
-
-              <label className="checkbox-field">
-                <input
-                  checked={overwrite}
-                  disabled={busy}
-                  onChange={(event) => setOverwrite(event.target.checked)}
-                  type="checkbox"
-                />
-                <span>Overwrite existing skill folders</span>
-              </label>
-
-              <div className="button-row">
-                <button
-                  className="primary-button"
-                  disabled={busy}
-                  onClick={() => {
-                    void handleInspect();
-                  }}
-                  type="button"
-                >
-                  Inspect
-                </button>
-                <button
-                  className="secondary-action-button"
-                  disabled={busy || selectedCount === 0}
-                  onClick={() => {
-                    void handleInstall();
-                  }}
-                  type="button"
-                >
-                  Install selected
-                </button>
-                <button
-                  className="ghost-button"
-                  disabled={busy}
-                  onClick={clearCandidates}
-                  type="button"
-                >
-                  Clear
-                </button>
               </div>
             </section>
           </div>
@@ -964,33 +932,30 @@ export default function App() {
         >
               <div className="panel-heading">
                 <div>
-                  <p className="panel-kicker">Archive Review</p>
-                  <h2>Candidate shortlist</h2>
+                  <p className="panel-kicker">{copy.shortlist.panelKicker}</p>
+                  <h2>{copy.shortlist.panelTitle}</h2>
                 </div>
                 <div className="mini-stats">
-                  <span>{candidates.length} found</span>
-                  <span>{selectedCount} selected</span>
+                  <span>{copy.metrics.found(candidates.length)}</span>
+                  <span>{copy.metrics.selected(selectedCount)}</span>
                 </div>
               </div>
-              <p className="panel-intro">
-                Treat this as a catalog table, not a download bucket. Review each folder, then mark
-                the ones that deserve a place in your Codex profile.
-              </p>
+              <p className="panel-intro">{copy.shortlist.panelIntro}</p>
               <div className="workspace-focus-note">
-                <span>Review mode</span>
+                <span>{copy.shortlist.focusLabel}</span>
                 <p>{shortlistHint}</p>
               </div>
 
               <div className="candidate-stage">
                 {candidates.length === 0 ? (
                   <div className="empty-state">
-                    <p>Shortlist is empty.</p>
-                    <span>Run inspect to scan the repository archive for folders that ship with `SKILL.md`.</span>
+                    <p>{copy.shortlist.emptyTitle}</p>
+                    <span>{copy.shortlist.emptyCopy}</span>
                   </div>
                 ) : (
                   <>
                     <div className="candidate-toolbar">
-                      <p>Inspect first, then mark only the candidates that belong in your vault.</p>
+                      <p>{copy.shortlist.toolbarCopy}</p>
                       <div className="candidate-toolbar-actions">
                         <button
                           className="ghost-button candidate-toolbar-button"
@@ -998,7 +963,7 @@ export default function App() {
                           onClick={selectAllCandidates}
                           type="button"
                         >
-                          Select all
+                          {copy.shortlist.selectAll}
                         </button>
                         <button
                           className="ghost-button candidate-toolbar-button"
@@ -1006,7 +971,7 @@ export default function App() {
                           onClick={clearSelectedCandidates}
                           type="button"
                         >
-                          Clear selection
+                          {copy.shortlist.clearSelection}
                         </button>
                       </div>
                     </div>
@@ -1028,7 +993,7 @@ export default function App() {
                               <div className="candidate-copy">
                                 <div className="candidate-header">
                                   <strong>{candidate.name}</strong>
-                                  <span className="candidate-chip">{checked ? "Queued" : "Available"}</span>
+                                  <span className="candidate-chip">{checked ? copy.shortlist.queued : copy.shortlist.available}</span>
                                 </div>
                                 <code className="candidate-path">{candidate.path}</code>
                                 {candidate.description ? (
@@ -1054,23 +1019,20 @@ export default function App() {
         >
               <div className="panel-heading">
                 <div>
-                  <p className="panel-kicker">Session Transcript</p>
-                  <h2>Logs & outcomes</h2>
+                  <p className="panel-kicker">{copy.transcript.panelKicker}</p>
+                  <h2>{copy.transcript.panelTitle}</h2>
                 </div>
                 {result ? (
                   <div className="mini-stats">
-                    <span>{result.installedCount} installed</span>
-                    <span>{result.skippedCount} skipped</span>
-                    <span>{result.failedCount} failed</span>
+                    <span>{copy.metrics.installed(result.installedCount)}</span>
+                    <span>{copy.metrics.skipped(result.skippedCount)}</span>
+                    <span>{copy.metrics.failed(result.failedCount)}</span>
                   </div>
                 ) : null}
               </div>
-              <p className="panel-intro">
-                Every inspection and install event is written into the ledger below so you can verify
-                what happened without guessing.
-              </p>
+              <p className="panel-intro">{copy.transcript.panelIntro}</p>
               <div className="workspace-focus-note workspace-focus-note-ledger">
-                <span>Ledger focus</span>
+                <span>{copy.transcript.focusLabel}</span>
                 <p>{transcriptHint}</p>
               </div>
 
@@ -1105,7 +1067,7 @@ export default function App() {
             role="dialog"
             tabIndex={-1}
           >
-            <p className="panel-kicker">{dialog.tone.toUpperCase()}</p>
+            <p className="panel-kicker">{copy.dialogTone[dialog.tone]}</p>
             <h3 id="dialog-title">{dialog.title}</h3>
             <p id="dialog-message">{dialog.message}</p>
             <div className="dialog-actions">
@@ -1114,7 +1076,7 @@ export default function App() {
                 onClick={closeDialog}
                 type="button"
               >
-                Dismiss
+                {copy.dialogActions.dismiss}
               </button>
               <button
                 className="primary-button"
@@ -1122,7 +1084,7 @@ export default function App() {
                 ref={dialogCloseButtonRef}
                 type="button"
               >
-                Close
+                {copy.dialogActions.close}
               </button>
             </div>
           </div>

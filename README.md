@@ -2,13 +2,15 @@
 
 Codex Skill Installer is now a Tauri 2 desktop app with a React + TypeScript frontend and a Rust core.
 
-It keeps the original workflow:
+It keeps the original workflow while giving the desktop shell a more deliberate, review-first layout:
 
 - Paste a GitHub repository, `tree`, or `blob` URL.
 - Inspect the repository for directories that contain `SKILL.md`.
 - Select one or more detected skills.
 - Install them into your local Codex skills directory.
 - Skip existing folders unless overwrite is enabled.
+- Move through top-level `Setup`, `Shortlist`, and `Transcript` tabs instead of one long scrolling view.
+- Switch the desktop UI between English and Japanese with a persisted `EN / 日本語` control in the custom title bar.
 
 The default install target still follows the common Codex layout:
 
@@ -45,6 +47,16 @@ npm install
 npm run tauri dev
 ```
 
+## Screenshot
+
+The current desktop shell uses a custom Tauri title bar, a persisted `EN / 日本語` language toggle, and a compact-height layout that keeps the `Setup` tab readable around `1280x820`.
+
+![Setup tab screenshot](docs/screenshots/setup-bilingual-en-1280x820.png)
+
+## Documentation
+
+- [UI tour](docs/ui-tour.md)
+
 ## Production Build
 
 ```powershell
@@ -75,11 +87,15 @@ The optional `Ref override` field can replace the ref embedded in the URL.
 - Unsafe archive paths are rejected during extraction.
 - Install results preserve the original `installed / skipped / failed` outcome model.
 - The folder picker is implemented as a native desktop dialog through the Tauri host side.
+- The desktop chrome is custom-drawn so the app can style its own title bar and window controls.
+- The desktop workspace is split into top-level `Setup`, `Shortlist`, and `Transcript` tabs.
+- The UI locale can be switched between English and Japanese, and the chosen locale is stored in local storage.
 
 ## Validation
 
 - Frontend typecheck + bundle: `npm run build`
 - Rust unit tests: `cargo test --manifest-path src-tauri/Cargo.toml`
+- UI evidence: tracked screenshots under `docs/screenshots/`, including English and Japanese captures at `1280x820`
 
 ## CI
 
