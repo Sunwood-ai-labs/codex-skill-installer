@@ -81,8 +81,7 @@ button {
 .app-shell {
   position: relative;
   min-height: 100vh;
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .app-shell::before,
@@ -400,10 +399,10 @@ button {
   width: min(1340px, calc(100vw - 1.8rem));
   margin: 0 auto;
   display: grid;
-  grid-template-rows: auto 1fr;
-  gap: 1.35rem;
-  min-height: calc(100vh - 5.75rem);
-  padding: 1rem 0 2.6rem;
+  grid-template-rows: auto auto 1fr;
+  gap: 1rem;
+  height: calc(100vh - 5.75rem);
+  padding: 1rem 0 1.2rem;
 }
 
 .hero-panel,
@@ -439,11 +438,14 @@ button {
 .hero-status,
 .form-panel,
 .candidate-panel,
-.log-panel {
+.log-panel,
+.setup-panel {
   animation: panel-rise 620ms ease both;
 }
 
 .hero-copy h1,
+.workspace-header h1,
+.setup-copy h2,
 .panel-heading h2,
 .dialog-card h3 {
   margin: 0;
@@ -457,6 +459,53 @@ button {
   font-size: clamp(2.9rem, 5vw, 4.9rem);
   line-height: 0.94;
   letter-spacing: 0.01em;
+}
+
+.workspace-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.15rem;
+  border-radius: 26px;
+  border: 1.5px solid rgba(23, 33, 41, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.56) 0%, rgba(245, 233, 218, 0.92) 100%);
+  box-shadow: 0 16px 28px rgba(77, 58, 39, 0.08);
+}
+
+.workspace-header h1 {
+  font-size: clamp(2rem, 3vw, 2.9rem);
+  line-height: 0.95;
+}
+
+.workspace-header-copy {
+  max-width: 62ch;
+  margin: 0.45rem 0 0;
+  color: var(--ink-soft);
+  line-height: 1.6;
+}
+
+.workspace-header-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.55rem;
+}
+
+.workspace-header-metrics span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  padding: 0.36rem 0.72rem;
+  border-radius: 999px;
+  border: 1px solid rgba(23, 33, 41, 0.1);
+  background: rgba(23, 33, 41, 0.04);
+  color: var(--ink);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .hero-banner {
@@ -774,12 +823,14 @@ button {
   text-transform: uppercase;
 }
 
+.app-tabbar,
 .workspace-tabbar {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.8rem;
 }
 
+.app-tab,
 .workspace-tab {
   display: flex;
   align-items: center;
@@ -798,10 +849,12 @@ button {
     box-shadow 140ms ease;
 }
 
+.app-tab:hover,
 .workspace-tab:hover {
   transform: translateY(-1px);
 }
 
+.app-tab[aria-selected="true"],
 .workspace-tab[aria-selected="true"] {
   border-color: rgba(164, 94, 55, 0.22);
   background:
@@ -810,11 +863,14 @@ button {
   box-shadow: 0 12px 22px rgba(116, 72, 45, 0.08);
 }
 
+.app-tab span,
+.app-tab strong,
 .workspace-tab span,
 .workspace-tab strong {
   pointer-events: none;
 }
 
+.app-tab span,
 .workspace-tab span {
   font-size: 0.8rem;
   font-weight: 700;
@@ -822,6 +878,7 @@ button {
   text-transform: uppercase;
 }
 
+.app-tab strong,
 .workspace-tab strong {
   color: var(--accent-strong);
   font-family: var(--mono-font);
@@ -830,10 +887,59 @@ button {
 
 .workspace-panel {
   min-height: 0;
-  height: clamp(31rem, calc(100vh - 24rem), 43rem);
+  height: 100%;
   display: grid;
   grid-template-rows: auto auto auto 1fr;
   overflow: hidden;
+}
+
+.setup-panel {
+  padding: 1.25rem;
+}
+
+.setup-panel.workspace-panel {
+  grid-template-rows: 1fr;
+}
+
+.setup-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+  grid-template-areas:
+    "copy status"
+    "form form";
+  gap: 1rem;
+  min-height: 0;
+}
+
+.setup-copy {
+  grid-area: copy;
+  display: grid;
+  align-content: start;
+  gap: 1rem;
+  min-height: 0;
+}
+
+.setup-copy h2 {
+  font-size: clamp(2.2rem, 4vw, 3.4rem);
+  line-height: 0.95;
+}
+
+.setup-copy .panel-intro {
+  max-width: 58ch;
+}
+
+.setup-status {
+  grid-area: status;
+}
+
+.setup-form-panel {
+  grid-area: form;
+  height: auto;
+  overflow: visible;
+  padding: 1.15rem;
+  border-radius: 24px;
+  border: 1.5px solid var(--line);
+  background: rgba(255, 255, 255, 0.42);
 }
 
 .workspace-focus-note {
@@ -1319,27 +1425,27 @@ button {
 }
 
 @media (max-width: 1080px) {
-  .hero-panel,
-  .hybrid-workspace {
+  .workspace {
+    height: auto;
+    min-height: auto;
+  }
+
+  .workspace-header,
+  .setup-grid {
     grid-template-columns: 1fr;
   }
 
-  .workspace {
-    min-height: auto;
+  .workspace-header {
+    align-items: flex-start;
   }
 
   .hero-rundown {
     grid-template-columns: 1fr;
   }
 
-  .form-panel,
+  .setup-form-panel,
   .workspace-panel {
     height: auto;
-  }
-
-  .control-rail {
-    position: relative;
-    top: auto;
   }
 }
 
@@ -1375,19 +1481,21 @@ button {
 
   .workspace {
     width: min(100vw, calc(100vw - 1rem));
+    height: auto;
     min-height: auto;
     padding: 0.65rem 0 1.4rem;
   }
 
-  .hero-panel,
+  .workspace-header,
   .panel {
     padding: 1.1rem;
     border-radius: 24px;
   }
 
-  .hero-copy h1 {
+  .workspace-header h1,
+  .setup-copy h2 {
     max-width: none;
-    font-size: clamp(2.45rem, 9vw, 3.3rem);
+    font-size: clamp(2rem, 9vw, 3rem);
   }
 
   .status-grid {
@@ -1399,12 +1507,13 @@ button {
     align-items: flex-start;
   }
 
+  .app-tabbar,
   .workspace-tabbar {
     grid-template-columns: 1fr;
   }
 
-  .workspace-overview {
-    padding: 1rem;
+  .workspace-header-metrics {
+    justify-content: flex-start;
   }
 
   .candidate-header {
@@ -1427,13 +1536,8 @@ button {
     width: 100%;
   }
 
-  .form-panel,
+  .setup-form-panel,
   .workspace-panel {
     height: auto;
-  }
-
-  .control-rail {
-    position: relative;
-    top: auto;
   }
 }

@@ -24,7 +24,7 @@ type FieldErrors = {
   repositoryUrl: string | null;
 };
 
-type WorkspaceTab = "candidates" | "logs";
+type WorkspaceTab = "setup" | "candidates" | "logs";
 
 type WindowAction = (appWindow: ReturnType<typeof getCurrentWindow>) => Promise<void>;
 
@@ -115,7 +115,7 @@ export default function App() {
     destination: null,
     repositoryUrl: null,
   });
-  const [activeTab, setActiveTab] = useState<WorkspaceTab>("candidates");
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>("setup");
   const [logs, setLogs] = useState<LogEntry[]>([
     {
       id: nextLogId(),
@@ -132,6 +132,7 @@ export default function App() {
   const dialogTriggerRef = useRef<HTMLElement | null>(null);
   const urlInputRef = useRef<HTMLInputElement | null>(null);
   const destinationInputRef = useRef<HTMLInputElement | null>(null);
+  const setupTabRef = useRef<HTMLButtonElement | null>(null);
   const candidateTabRef = useRef<HTMLButtonElement | null>(null);
   const logTabRef = useRef<HTMLButtonElement | null>(null);
   const repositoryHelpId = useId();
@@ -145,7 +146,11 @@ export default function App() {
 
     if (options?.focusTab) {
       window.requestAnimationFrame(() => {
-        const nextButton = nextTab === "candidates" ? candidateTabRef.current : logTabRef.current;
+        const nextButton = nextTab === "setup"
+          ? setupTabRef.current
+          : nextTab === "candidates"
+            ? candidateTabRef.current
+            : logTabRef.current;
         nextButton?.focus();
       });
     }
@@ -169,7 +174,7 @@ export default function App() {
     setCandidates((current) => (current.length === 0 ? current : []));
     setSelectedPaths((current) => (current.length === 0 ? current : []));
     setResult((current) => (current ? null : current));
-    switchWorkspaceTab("candidates");
+    switchWorkspaceTab("setup");
   }
 
   function focusFirstErroredField(errors: FieldErrors): void {
@@ -388,7 +393,6 @@ export default function App() {
     setBusyLabel("Inspecting repository...");
     setLiveMessage("Inspecting repository.");
     setResult(null);
-    switchWorkspaceTab("candidates");
     appendLog("info", "Inspecting repository...");
 
     try {
@@ -402,8 +406,10 @@ export default function App() {
 
       if (inspectResult.candidates.length === 0) {
         appendLog("info", "No candidates detected.");
+        switchWorkspaceTab("setup");
       } else {
         appendLog("info", "Review the detected skills, then choose which ones to install.");
+        switchWorkspaceTab("candidates");
       }
     } catch (error) {
       const message = toErrorMessage(error);
@@ -481,7 +487,7 @@ export default function App() {
     setCandidates([]);
     setSelectedPaths([]);
     setResult(null);
-    switchWorkspaceTab("candidates");
+    switchWorkspaceTab("setup");
     appendLog("info", "Candidate list cleared.");
   }
 
@@ -514,17 +520,24 @@ export default function App() {
 
     event.preventDefault();
 
+    const order: WorkspaceTab[] = ["setup", "candidates", "logs"];
+    const currentIndex = order.indexOf(activeTab);
+
     if (event.key === "Home") {
-      switchWorkspaceTab("candidates", { focusTab: true });
+      switchWorkspaceTab(order[0], { focusTab: true });
       return;
     }
 
     if (event.key === "End") {
-      switchWorkspaceTab("logs", { focusTab: true });
+      switchWorkspaceTab(order[order.length - 1], { focusTab: true });
       return;
     }
 
-    switchWorkspaceTab(activeTab === "candidates" ? "logs" : "candidates", { focusTab: true });
+    const nextIndex = event.key === "ArrowRight"
+      ? (currentIndex + 1) % order.length
+      : (currentIndex - 1 + order.length) % order.length;
+
+    switchWorkspaceTab(order[nextIndex], { focusTab: true });
   }
 
   function handleWindowControlClick(action: WindowAction): void {
@@ -546,6 +559,7 @@ export default function App() {
     ? `${result.installedCount} installed / ${result.skippedCount} skipped / ${result.failedCount} failed`
     : "No install run in this session";
   const destinationSummary = destination.trim() || "Resolving default target";
+  const setupHint = "Lock the source and destination first. Once those are stable, move to the shortlist tab.";
   const shortlistHint = candidates.length === 0
     ? "Run inspect to build the shortlist."
     : selectedCount === 0
@@ -556,6 +570,16 @@ export default function App() {
     : result
       ? "Audit the final outcomes before you close the session."
       : "The ledger stays quiet until inspection or install starts.";
+  const workspaceTitle = activeTab === "setup"
+    ? "Setup desk"
+    : activeTab === "candidates"
+      ? "Shortlist review"
+      : "Session transcript";
+  const workspaceCopy = activeTab === "setup"
+    ? "Desktop flow starts here. Confirm the repository and destination before you open the shortlist."
+    : activeTab === "candidates"
+      ? "Keep the list tight and deliberate. The shortlist should feel curated, not dumped onto one long page."
+      : "Treat the ledger as a control room. Every inspect and install event stays in reach while you work.";
 
   return (
     <div className="app-shell">
@@ -651,79 +675,147 @@ export default function App() {
       <div className="background-glow background-glow-right" />
 
       <main className="workspace">
-        <section className="hero-panel">
-          <div className="hero-copy">
-            <div className="hero-banner">
-              <p className="eyebrow">Field Manual 01</p>
-              <span className="hero-stamp">Curated desktop installer</span>
-            </div>
-            <h1>Curate skills before they enter your local vault.</h1>
-            <p className="hero-text">
-              This app is not a bulk importer. It is a selection desk for GitHub-hosted Codex
-              skills: inspect first, mark only the folders that belong in your working set, then
-              install with a traceable session log.
-            </p>
-            <div className="hero-rundown">
-              {WORKFLOW_STEPS.map((step) => (
-                <article className="rundown-card" key={step.code}>
-                  <span className="rundown-index">{step.code}</span>
-                  <div>
-                    <h2>{step.title}</h2>
-                    <p>{step.detail}</p>
-                  </div>
-                </article>
-              ))}
-            </div>
+        <section className="workspace-header">
+          <div>
+            <p className="eyebrow">Field Manual 01</p>
+            <h1>{workspaceTitle}</h1>
+            <p className="workspace-header-copy">{workspaceCopy}</p>
           </div>
-
-          <div className="hero-status">
-            <div className="status-header">
-              <span className={`status-pill ${busy ? "status-pill-busy" : ""}`}>
-                {busy ? "Working" : "Ready"}
-              </span>
-              <p className="status-kicker">Session ledger</p>
-            </div>
-            <p className="status-lead">{sessionSummary}</p>
-            <div className="status-grid">
-              <div className="status-metric">
-                <span>Candidates</span>
-                <strong>{candidates.length}</strong>
-              </div>
-              <div className="status-metric">
-                <span>Marked</span>
-                <strong>{selectedCount}</strong>
-              </div>
-              <div className="status-metric">
-                <span>Window</span>
-                <strong>{isWindowMaximized ? "max" : "std"}</strong>
-              </div>
-            </div>
-            <dl className="status-notes">
-              <div>
-                <dt>Runtime</dt>
-                <dd>Tauri 2 with a Rust host</dd>
-              </div>
-              <div>
-                <dt>Target</dt>
-                <dd>{destinationSummary}</dd>
-              </div>
-              <div>
-                <dt>Ledger</dt>
-                <dd>{installLedgerLabel}</dd>
-              </div>
-            </dl>
+          <div className="workspace-header-metrics">
+            <span>{busy ? "Working" : "Ready"}</span>
+            <span>{candidates.length} found</span>
+            <span>{selectedCount} marked</span>
+            <span>{logs.length} ledger lines</span>
           </div>
         </section>
 
-        <section className="hybrid-workspace">
-          <aside className="control-rail">
-            <section className="panel form-panel">
+        <div aria-label="Workspace sections" className="app-tabbar" role="tablist">
+          <button
+            aria-controls="workspace-panel-setup"
+            aria-selected={activeTab === "setup"}
+            className="app-tab"
+            id="workspace-tab-setup"
+            onClick={() => switchWorkspaceTab("setup")}
+            onKeyDown={handleWorkspaceTabKeyDown}
+            ref={setupTabRef}
+            role="tab"
+            tabIndex={activeTab === "setup" ? 0 : -1}
+            type="button"
+          >
+            <span>Setup</span>
+            <strong>01</strong>
+          </button>
+          <button
+            aria-controls="workspace-panel-candidates"
+            aria-selected={activeTab === "candidates"}
+            className="app-tab"
+            id="workspace-tab-candidates"
+            onClick={() => switchWorkspaceTab("candidates")}
+            onKeyDown={handleWorkspaceTabKeyDown}
+            ref={candidateTabRef}
+            role="tab"
+            tabIndex={activeTab === "candidates" ? 0 : -1}
+            type="button"
+          >
+            <span>Shortlist</span>
+            <strong>{candidates.length}</strong>
+          </button>
+          <button
+            aria-controls="workspace-panel-logs"
+            aria-selected={activeTab === "logs"}
+            className="app-tab"
+            id="workspace-tab-logs"
+            onClick={() => switchWorkspaceTab("logs")}
+            onKeyDown={handleWorkspaceTabKeyDown}
+            ref={logTabRef}
+            role="tab"
+            tabIndex={activeTab === "logs" ? 0 : -1}
+            type="button"
+          >
+            <span>Transcript</span>
+            <strong>{unreadLogCount > 0 ? `+${Math.min(unreadLogCount, 99)}` : logs.length}</strong>
+          </button>
+        </div>
+
+        <section
+          aria-labelledby="workspace-tab-setup"
+          className="panel setup-panel workspace-panel"
+          hidden={activeTab !== "setup"}
+          id="workspace-panel-setup"
+          role="tabpanel"
+        >
+          <div className="setup-grid">
+            <section className="setup-copy">
+              <div className="hero-banner">
+                <span className="hero-stamp">Curated desktop installer</span>
+                <span className="panel-tag">Source / destination</span>
+              </div>
+              <h2>Curate skills before they enter your local vault.</h2>
+              <p className="panel-intro">
+                This app is not a bulk importer. Lock the repository and destination first, inspect
+                the archive next, then move to the shortlist tab only after the source is stable.
+              </p>
+              <div className="hero-rundown">
+                {WORKFLOW_STEPS.map((step) => (
+                  <article className="rundown-card" key={step.code}>
+                    <span className="rundown-index">{step.code}</span>
+                    <div>
+                      <h3>{step.title}</h3>
+                      <p>{step.detail}</p>
+                    </div>
+                  </article>
+                ))}
+              </div>
+              <div className="workspace-focus-note">
+                <span>Setup note</span>
+                <p>{setupHint}</p>
+              </div>
+            </section>
+
+            <div className="hero-status setup-status">
+              <div className="status-header">
+                <span className={`status-pill ${busy ? "status-pill-busy" : ""}`}>
+                  {busy ? "Working" : "Ready"}
+                </span>
+                <p className="status-kicker">Session ledger</p>
+              </div>
+              <p className="status-lead">{sessionSummary}</p>
+              <div className="status-grid">
+                <div className="status-metric">
+                  <span>Candidates</span>
+                  <strong>{candidates.length}</strong>
+                </div>
+                <div className="status-metric">
+                  <span>Marked</span>
+                  <strong>{selectedCount}</strong>
+                </div>
+                <div className="status-metric">
+                  <span>Window</span>
+                  <strong>{isWindowMaximized ? "max" : "std"}</strong>
+                </div>
+              </div>
+              <dl className="status-notes">
+                <div>
+                  <dt>Runtime</dt>
+                  <dd>Tauri 2 with a Rust host</dd>
+                </div>
+                <div>
+                  <dt>Target</dt>
+                  <dd>{destinationSummary}</dd>
+                </div>
+                <div>
+                  <dt>Ledger</dt>
+                  <dd>{installLedgerLabel}</dd>
+                </div>
+              </dl>
+            </div>
+
+            <section className="form-panel setup-form-panel">
               <div className="panel-heading">
                 <div>
                   <p className="panel-kicker">Acquisition Desk</p>
                   <h2>Source repository & local target</h2>
                 </div>
-                <span className="panel-tag">Source / destination</span>
               </div>
               <p className="panel-intro">
                 Start with a repository, tree, or blob URL. The installer will inspect the archive,
@@ -859,72 +951,17 @@ export default function App() {
                   Clear
                 </button>
               </div>
-
-              <div className="control-fieldnote">
-                <span className="control-fieldnote-label">Desk note</span>
-                <p>{activeTab === "candidates" ? shortlistHint : transcriptHint}</p>
-              </div>
             </section>
-          </aside>
+          </div>
+        </section>
 
-          <section className="workspace-panes" aria-label="Review workspace">
-            <div className="workspace-overview">
-              <div>
-                <p className="panel-kicker">Workbench focus</p>
-                <h2>{activeTab === "candidates" ? "Shortlist review" : "Session transcript"}</h2>
-              </div>
-              <p className="workspace-overview-copy">
-                {activeTab === "candidates"
-                  ? "Keep the list tight and deliberate. The right side is now a fixed review surface, not a scrolling dump."
-                  : "Treat the ledger as a control room. Every inspect and install event stays in reach while you work."}
-              </p>
-              <div className="workspace-overview-metrics">
-                <span>{candidates.length} found</span>
-                <span>{selectedCount} marked</span>
-                <span>{logs.length} ledger lines</span>
-              </div>
-            </div>
-
-            <div aria-label="Workspace view" className="workspace-tabbar" role="tablist">
-              <button
-                aria-controls="workspace-panel-candidates"
-                aria-selected={activeTab === "candidates"}
-                className="workspace-tab"
-                id="workspace-tab-candidates"
-                onClick={() => switchWorkspaceTab("candidates")}
-                onKeyDown={handleWorkspaceTabKeyDown}
-                ref={candidateTabRef}
-                role="tab"
-                tabIndex={activeTab === "candidates" ? 0 : -1}
-                type="button"
-              >
-                <span>Shortlist</span>
-                <strong>{candidates.length}</strong>
-              </button>
-              <button
-                aria-controls="workspace-panel-logs"
-                aria-selected={activeTab === "logs"}
-                className="workspace-tab"
-                id="workspace-tab-logs"
-                onClick={() => switchWorkspaceTab("logs")}
-                onKeyDown={handleWorkspaceTabKeyDown}
-                ref={logTabRef}
-                role="tab"
-                tabIndex={activeTab === "logs" ? 0 : -1}
-                type="button"
-              >
-                <span>Transcript</span>
-                <strong>{unreadLogCount > 0 ? `+${Math.min(unreadLogCount, 99)}` : logs.length}</strong>
-              </button>
-            </div>
-
-            <section
-              aria-labelledby="workspace-tab-candidates"
-              className="panel candidate-panel workspace-panel"
-              hidden={activeTab !== "candidates"}
-              id="workspace-panel-candidates"
-              role="tabpanel"
-            >
+        <section
+          aria-labelledby="workspace-tab-candidates"
+          className="panel candidate-panel workspace-panel"
+          hidden={activeTab !== "candidates"}
+          id="workspace-panel-candidates"
+          role="tabpanel"
+        >
               <div className="panel-heading">
                 <div>
                   <p className="panel-kicker">Archive Review</p>
@@ -1006,15 +1043,15 @@ export default function App() {
                   </>
                 )}
               </div>
-            </section>
+        </section>
 
-            <section
-              aria-labelledby="workspace-tab-logs"
-              className="panel log-panel workspace-panel"
-              hidden={activeTab !== "logs"}
-              id="workspace-panel-logs"
-              role="tabpanel"
-            >
+        <section
+          aria-labelledby="workspace-tab-logs"
+          className="panel log-panel workspace-panel"
+          hidden={activeTab !== "logs"}
+          id="workspace-panel-logs"
+          role="tabpanel"
+        >
               <div className="panel-heading">
                 <div>
                   <p className="panel-kicker">Session Transcript</p>
@@ -1054,8 +1091,6 @@ export default function App() {
                   </div>
                 </div>
               </div>
-            </section>
-          </section>
         </section>
       </main>
 
