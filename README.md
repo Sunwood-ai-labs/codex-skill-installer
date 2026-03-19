@@ -49,9 +49,15 @@ npm run tauri dev
 
 ## Screenshot
 
-The current desktop shell uses a custom Tauri title bar, a persisted `EN / 日本語` language toggle, and a compact-height layout that keeps the `Setup` tab readable around `1280x820`.
+The current desktop shell uses a flush custom Tauri title bar, a persisted `EN / 日本語` language toggle, unified typography across locales, and a compact-height layout that keeps the `Setup` tab readable around `1280x820`.
 
-![Setup tab screenshot](docs/screenshots/setup-bilingual-en-1280x820.png)
+English `Setup`:
+
+![Setup tab screenshot in English](docs/screenshots/setup-bilingual-en-1280x820.png)
+
+Japanese `Setup`:
+
+![Setup tab screenshot in Japanese](docs/screenshots/setup-bilingual-ja-1280x820.png)
 
 ## Documentation
 
@@ -87,7 +93,7 @@ The optional `Ref override` field can replace the ref embedded in the URL.
 - Unsafe archive paths are rejected during extraction.
 - Install results preserve the original `installed / skipped / failed` outcome model.
 - The folder picker is implemented as a native desktop dialog through the Tauri host side.
-- The desktop chrome is custom-drawn so the app can style its own title bar and window controls.
+- The desktop chrome is custom-drawn so the app can style its own title bar and window controls, with the top bar sitting flush to the window frame.
 - The desktop workspace is split into top-level `Setup`, `Shortlist`, and `Transcript` tabs.
 - The UI locale can be switched between English and Japanese, and the chosen locale is stored in local storage.
 
