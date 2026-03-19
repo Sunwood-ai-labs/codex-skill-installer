@@ -178,7 +178,7 @@ button {
   position: sticky;
   top: 0;
   z-index: 4;
-  padding: 0.56rem 0.82rem 0;
+  padding: 0;
   background: linear-gradient(180deg, rgba(26, 35, 44, 0.78) 0%, rgba(26, 35, 44, 0) 100%);
   backdrop-filter: blur(8px);
 }
@@ -188,15 +188,18 @@ button {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 0.85rem;
-  width: min(1340px, calc(100vw - 1.8rem));
+  width: 100%;
   min-height: 3.9rem;
-  margin: 0 auto;
+  margin: 0;
   padding: 0.4rem 0.5rem 0.4rem 0.76rem;
-  border-radius: 24px;
+  border-radius: 0;
   border: 1px solid rgba(233, 221, 205, 0.18);
+  border-top: 0;
+  border-left: 0;
+  border-right: 0;
   background:
     linear-gradient(135deg, rgba(18, 27, 36, 0.98) 0%, rgba(26, 38, 48, 0.96) 100%);
-  box-shadow: 0 18px 34px rgba(14, 18, 23, 0.24);
+  box-shadow: 0 14px 28px rgba(14, 18, 23, 0.22);
 }
 
 .titlebar-drag-region {
@@ -1612,7 +1615,7 @@ button {
 
 @media (max-height: 860px) {
   .custom-titlebar {
-    padding-top: 0.42rem;
+    padding-top: 0;
   }
 
   .custom-titlebar-inner {
@@ -1794,12 +1797,12 @@ button {
 
 @media (max-width: 720px) {
   .custom-titlebar {
-    padding: 0.55rem 0.5rem 0;
+    padding: 0;
   }
 
   .custom-titlebar-inner {
     grid-template-columns: 1fr;
-    width: calc(100vw - 1rem);
+    width: 100%;
     padding: 0.72rem;
   }
 
