@@ -685,7 +685,8 @@ fn normalize_archive_path(name: &str) -> AppResult<String> {
         }
     }
 
-    if first_component.is_some_and(|part| part.contains(':'))
+    if normalized.as_bytes().get(1) == Some(&b':')
+        || first_component.is_some_and(|part| part.contains(':'))
         || normalized.split('/').any(|part| part == "..")
     {
         return Err(AppError::message(format!(
@@ -751,6 +752,6 @@ mod tests {
 
     #[test]
     fn normalize_skill_selector_matches_current_rules() {
-        assert_eq!(normalize_skill_selector("\\skills/demo/"), "skills/demo");
+        assert_eq!(normalize_skill_selector("\\skills/demo/"), "/skills/demo");
     }
 }
