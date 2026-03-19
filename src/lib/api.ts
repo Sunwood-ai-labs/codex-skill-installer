@@ -11,7 +11,7 @@ function ensureTauriRuntime(locale: Locale): void {
   if (!tauriWindow.__TAURI_INTERNALS__) {
     throw new Error(
       locale === "ja"
-        ? "Tauri ランタイムが利用できません。`npm run tauri dev` でアプリを起動してください。"
+        ? "Tauri ランタイムが利用できません。`npm run tauri dev` で起動してください。"
         : "Tauri runtime is not available. Launch the app with `npm run tauri dev`.",
     );
   }

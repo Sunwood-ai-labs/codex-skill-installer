@@ -1,0 +1,63 @@
+:root {
+  --vp-c-brand-1: #a45e37;
+  --vp-c-brand-2: #8d4c2a;
+  --vp-c-brand-3: #73381d;
+  --vp-c-brand-soft: rgba(164, 94, 55, 0.16);
+  --vp-c-bg: #f4ecdf;
+  --vp-c-bg-alt: #fbf6ee;
+  --vp-c-bg-elv: #fffaf2;
+  --vp-c-divider: rgba(23, 33, 41, 0.12);
+  --vp-font-family-base: "Yu Gothic UI", "Yu Gothic", "Hiragino Sans", "Meiryo", "Segoe UI Variable Text", sans-serif;
+  --vp-font-family-mono: "Cascadia Mono", "Cascadia Code", "Consolas", monospace;
+}
+
+html,
+body {
+  background:
+    radial-gradient(circle at top left, rgba(164, 94, 55, 0.14), transparent 24%),
+    radial-gradient(circle at right 10%, rgba(49, 94, 85, 0.12), transparent 28%),
+    linear-gradient(180deg, #efe6d7 0%, #eadfce 53%, #f4ecdf 100%);
+}
+
+.VPNavBar {
+  backdrop-filter: blur(12px);
+  background: rgba(18, 27, 36, 0.9);
+}
+
+.VPNavBar .title,
+.VPNavBar .text,
+.VPMenu .item,
+.VPSidebarItem .text {
+  letter-spacing: 0.01em;
+}
+
+.VPDoc,
+.VPLocalNav {
+  background: transparent;
+}
+
+.VPDoc h1,
+.VPDoc h2,
+.VPDoc h3,
+.VPHome .name {
+  font-family: var(--vp-font-family-base);
+  letter-spacing: 0.01em;
+}
+
+.VPHome .VPButton.brand {
+  background: linear-gradient(135deg, #a45e37 0%, #8d4c2a 100%);
+  border-color: transparent;
+}
+
+.VPHome .VPButton.alt {
+  border-color: rgba(23, 33, 41, 0.16);
+}
+
+.VPDoc a {
+  text-decoration-thickness: 0.12em;
+  text-underline-offset: 0.14em;
+}
+
+.VPContent {
+  padding-bottom: 4rem;
+}

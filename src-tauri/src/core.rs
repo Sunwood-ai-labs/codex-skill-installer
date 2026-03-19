@@ -703,7 +703,7 @@ fn decode_segment(value: &str) -> String {
 }
 
 fn normalize_skill_selector(value: &str) -> String {
-    value.trim().trim_matches('/').replace('\\', "/").to_ascii_lowercase()
+    value.replace('\\', "/").trim().trim_matches('/').to_ascii_lowercase()
 }
 
 pub fn path_to_forward_slashes(path: &Path) -> String {
@@ -752,6 +752,7 @@ mod tests {
 
     #[test]
     fn normalize_skill_selector_matches_current_rules() {
-        assert_eq!(normalize_skill_selector("\\skills/demo/"), "/skills/demo");
+        assert_eq!(normalize_skill_selector("\\skills/demo/"), "skills/demo");
+        assert_eq!(normalize_skill_selector(" /skills/demo/ "), "skills/demo");
     }
 }
