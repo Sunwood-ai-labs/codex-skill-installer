@@ -99,7 +99,7 @@ export const UI_COPY = {
         {
           code: "01",
           title: "Inspect the archive",
-          detail: "Scan the repository and list only folders that actually ship with SKILL.md.",
+          detail: "Scan the repository and list only folders that actually ship with `SKILL.md` or `skill.md`.",
         },
         {
           code: "02",
@@ -120,7 +120,7 @@ export const UI_COPY = {
         "Treat this as a catalog table, not a download bucket. Review each folder, then mark the ones that deserve a place in your Codex profile.",
       focusLabel: "Review mode",
       emptyTitle: "Shortlist is empty.",
-      emptyCopy: "Run inspect to scan the repository archive for folders that ship with `SKILL.md`.",
+      emptyCopy: "Run inspect to scan the repository archive for folders that ship with `SKILL.md` or `skill.md`.",
       toolbarCopy: "Inspect first, then mark only the candidates that belong in your vault.",
       selectAll: "Select all",
       clearSelection: "Clear selection",
@@ -272,7 +272,7 @@ export const UI_COPY = {
         {
           code: "01",
           title: "アーカイブを確認",
-          detail: "リポジトリを走査し、SKILL.md を含むフォルダだけを一覧化します。",
+          detail: "リポジトリを走査し、skill manifest（`SKILL.md` または `skill.md`）を含むフォルダだけを一覧化します。",
         },
         {
           code: "02",
@@ -293,7 +293,7 @@ export const UI_COPY = {
         "ここはダウンロード置き場ではなく、きちんと目を通すための一覧表です。各フォルダを確認して、Codex プロファイルに入れるものだけを選んでください。",
       focusLabel: "レビュー中",
       emptyTitle: "ショートリストは空です。",
-      emptyCopy: "確認を実行すると、`SKILL.md` を含むフォルダをスキャンできます。",
+      emptyCopy: "確認を実行すると、skill manifest（`SKILL.md` または `skill.md`）を含むフォルダをスキャンできます。",
       toolbarCopy: "先に確認し、保管庫に入れる候補だけを選択してください。",
       selectAll: "すべて選択",
       clearSelection: "選択解除",
@@ -448,6 +448,14 @@ export function localizeServiceMessage(message: string, locale: Locale): string 
     return message;
   }
 
+  if (message === "Skill manifest is missing a parent directory.") {
+    return "skill manifest に親ディレクトリがありません。";
+  }
+
+  if (message === "No skill manifest directories found in the selected repository scope.") {
+    return "選択したリポジトリ範囲に skill manifest (SKILL.md / skill.md) を含むディレクトリが見つかりませんでした。";
+  }
+
   const exactMessages = new Map<string, string>([
     ["installed", "インストールしました。"],
     ["URL must be http(s).", "URL は http(s) である必要があります。"],
@@ -477,6 +485,16 @@ export function localizeServiceMessage(message: string, locale: Locale): string 
     if (localizedTail !== pathMessage[2]) {
       return `${pathMessage[1]}: ${localizedTail}`;
     }
+  }
+
+  const manifestNotFound = /^Skill manifest not found in (.+)$/.exec(message);
+  if (manifestNotFound) {
+    return `${manifestNotFound[1]} に skill manifest (SKILL.md / skill.md) が見つかりません`;
+  }
+
+  const duplicateManifest = /^Multiple skill manifests found in (.+)$/.exec(message);
+  if (duplicateManifest) {
+    return `${duplicateManifest[1]} に複数の skill manifest (SKILL.md / skill.md) が見つかりました`;
   }
 
   const matchers: Array<[RegExp, (...groups: string[]) => string]> = [

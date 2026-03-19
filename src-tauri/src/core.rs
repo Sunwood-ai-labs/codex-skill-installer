@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeSet, HashMap, HashSet},
+    collections::{hash_map::Entry, BTreeSet, HashMap, HashSet},
     env,
     fs::{self, File},
     io,
@@ -33,9 +33,7 @@ pub struct SkillService {
 
 impl SkillService {
     pub fn new() -> AppResult<Self> {
-        let client = Client::builder()
-            .timeout(Duration::from_secs(30))
-            .build()?;
+        let client = Client::builder().timeout(Duration::from_secs(30)).build()?;
         Ok(Self { client })
     }
 
@@ -112,7 +110,7 @@ impl SkillService {
         let discovered = self.list_skills(&repo, &extracted_root)?;
         if discovered.is_empty() {
             return Err(AppError::message(
-                "No SKILL.md directories found in the selected repository scope.",
+                "No skill manifest directories found in the selected repository scope.",
             ));
         }
 
@@ -196,7 +194,10 @@ impl SkillService {
             ),
         ];
 
-        for outcome in outcomes.iter().filter(|item| !item.installed && !item.skipped) {
+        for outcome in outcomes
+            .iter()
+            .filter(|item| !item.installed && !item.skipped)
+        {
             logs.push(format!("{}: {}", outcome.candidate.path, outcome.message));
         }
 
@@ -258,6 +259,12 @@ impl SkillService {
                     for item in &segments[4..] {
                         scope_parts.push(decode_segment(item));
                     }
+                    if scope_parts
+                        .last()
+                        .is_some_and(|item| item.eq_ignore_ascii_case(SKILL_FILE))
+                    {
+                        scope_parts.pop();
+                    }
                 }
                 "blob" | "raw" => {
                     if segments.len() < 5 {
@@ -288,7 +295,11 @@ impl SkillService {
         })
     }
 
-    fn download_archive(&self, repo: &ParsedRepoInfo, destination_dir: &Path) -> AppResult<PathBuf> {
+    fn download_archive(
+        &self,
+        repo: &ParsedRepoInfo,
+        destination_dir: &Path,
+    ) -> AppResult<PathBuf> {
         fs::create_dir_all(destination_dir)?;
         let mut last_error: Option<AppError> = None;
 
@@ -327,7 +338,11 @@ impl SkillService {
         persist_response(
             response,
             destination_dir,
-            if url.contains(".zip") { ".zip" } else { ".tar.gz" },
+            if url.contains(".zip") {
+                ".zip"
+            } else {
+                ".tar.gz"
+            },
         )
     }
 
@@ -355,7 +370,11 @@ impl SkillService {
         Ok(destination.join(root))
     }
 
-    fn list_skills(&self, repo: &ParsedRepoInfo, extracted_root: &Path) -> AppResult<Vec<SkillDescriptor>> {
+    fn list_skills(
+        &self,
+        repo: &ParsedRepoInfo,
+        extracted_root: &Path,
+    ) -> AppResult<Vec<SkillDescriptor>> {
         let scan_root = if repo.scope_path.is_empty() {
             extracted_root.to_path_buf()
         } else {
@@ -378,14 +397,17 @@ impl SkillService {
             if !entry.file_type().is_file() {
                 continue;
             }
-            if !entry.file_name().to_string_lossy().eq_ignore_ascii_case(SKILL_FILE) {
+            if !entry
+                .file_name()
+                .to_string_lossy()
+                .eq_ignore_ascii_case(SKILL_FILE)
+            {
                 continue;
             }
 
-            let parent = entry
-                .path()
-                .parent()
-                .ok_or_else(|| AppError::message("SKILL.md is missing a parent directory."))?;
+            let parent = entry.path().parent().ok_or_else(|| {
+                AppError::message("Skill manifest is missing a parent directory.")
+            })?;
             let relative_parent = parent.strip_prefix(extracted_root).map_err(|_| {
                 AppError::message("Failed to resolve skill path relative to archive root.")
             })?;
@@ -410,14 +432,23 @@ impl SkillService {
                 })?,
             );
 
-            seen.insert(
-                relative_path.clone(),
-                SkillDescriptor {
-                    relative_path,
-                    destination_name,
-                    manifest_path,
-                },
-            );
+            match seen.entry(relative_path.clone()) {
+                Entry::Occupied(existing) => {
+                    if existing.get().manifest_path != manifest_path {
+                        return Err(AppError::message(format!(
+                            "Multiple skill manifests found in {}",
+                            relative_path
+                        )));
+                    }
+                }
+                Entry::Vacant(slot) => {
+                    slot.insert(SkillDescriptor {
+                        relative_path,
+                        destination_name,
+                        manifest_path,
+                    });
+                }
+            }
         }
 
         let mut output = seen.into_values().collect::<Vec<_>>();
@@ -497,19 +528,16 @@ impl SkillService {
         descriptor: &SkillDescriptor,
         overwrite: bool,
     ) -> AppResult<PathBuf> {
-        let source_dir = if descriptor.relative_path.is_empty() || descriptor.relative_path == "." {
-            extracted_root.to_path_buf()
-        } else {
-            extracted_root.join(&descriptor.relative_path)
-        };
-
-        let manifest = source_dir.join(SKILL_FILE);
+        let manifest = extracted_root.join(&descriptor.manifest_path);
         if !manifest.is_file() {
             return Err(AppError::message(format!(
-                "SKILL.md not found in {}",
-                path_to_forward_slashes(&source_dir)
+                "Skill manifest not found in {}",
+                descriptor.relative_path
             )));
         }
+        let source_dir = manifest
+            .parent()
+            .ok_or_else(|| AppError::message("Skill manifest is missing a parent directory."))?;
 
         let destination = target_root.join(&descriptor.destination_name);
         if destination.exists() {
@@ -540,7 +568,8 @@ fn apply_ref_override(repo: &mut ParsedRepoInfo, ref_value: Option<&str>) {
 }
 
 fn list_archive_urls(repo: &ParsedRepoInfo) -> Vec<String> {
-    let safe_ref = url::form_urlencoded::byte_serialize(repo.ref_name.as_bytes()).collect::<String>();
+    let safe_ref =
+        url::form_urlencoded::byte_serialize(repo.ref_name.as_bytes()).collect::<String>();
     let candidates = [
         format!(
             "https://api.github.com/repos/{}/{}/tarball/{}",
@@ -570,7 +599,11 @@ fn list_archive_urls(repo: &ParsedRepoInfo) -> Vec<String> {
     output
 }
 
-fn persist_response(response: Response, destination_dir: &Path, suffix: &str) -> AppResult<PathBuf> {
+fn persist_response(
+    response: Response,
+    destination_dir: &Path,
+    suffix: &str,
+) -> AppResult<PathBuf> {
     let mut temp_file = Builder::new().suffix(suffix).tempfile_in(destination_dir)?;
     let mut reader = response;
     io::copy(&mut reader, temp_file.as_file_mut())?;
@@ -703,7 +736,11 @@ fn decode_segment(value: &str) -> String {
 }
 
 fn normalize_skill_selector(value: &str) -> String {
-    value.replace('\\', "/").trim().trim_matches('/').to_ascii_lowercase()
+    value
+        .replace('\\', "/")
+        .trim()
+        .trim_matches('/')
+        .to_ascii_lowercase()
 }
 
 pub fn path_to_forward_slashes(path: &Path) -> String {
@@ -727,19 +764,40 @@ fn copy_dir_all(source: &Path, destination: &Path) -> AppResult<()> {
 
 #[cfg(test)]
 mod tests {
+    use std::{fs, path::PathBuf};
+
+    use tempfile::tempdir;
+
+    use crate::models::{ParsedRepoInfo, SkillDescriptor};
+
     use super::{normalize_archive_path, normalize_skill_selector, SkillService};
 
     #[test]
     fn parse_repo_url_supports_blob_skill_file() {
         let service = SkillService::new().expect("service");
         let parsed = service
-            .parse_repo_url("https://github.com/openai/skills/blob/main/skills/.curated/example/SKILL.md")
+            .parse_repo_url(
+                "https://github.com/openai/skills/blob/main/skills/.curated/example/SKILL.md",
+            )
             .expect("parsed");
 
         assert_eq!(parsed.owner, "openai");
         assert_eq!(parsed.repo, "skills");
         assert_eq!(parsed.ref_name, "main");
         assert_eq!(parsed.scope_path, "skills/.curated/example");
+    }
+
+    #[test]
+    fn parse_repo_url_supports_tree_root_lowercase_skill_file() {
+        let service = SkillService::new().expect("service");
+        let parsed = service
+            .parse_repo_url("https://github.com/openai/skills/tree/main/skill.md")
+            .expect("parsed");
+
+        assert_eq!(parsed.owner, "openai");
+        assert_eq!(parsed.repo, "skills");
+        assert_eq!(parsed.ref_name, "main");
+        assert_eq!(parsed.scope_path, "");
     }
 
     #[test]
@@ -754,5 +812,94 @@ mod tests {
     fn normalize_skill_selector_matches_current_rules() {
         assert_eq!(normalize_skill_selector("\\skills/demo/"), "skills/demo");
         assert_eq!(normalize_skill_selector(" /skills/demo/ "), "skills/demo");
+    }
+
+    #[test]
+    fn list_skills_detects_root_lowercase_manifest() {
+        let service = SkillService::new().expect("service");
+        let extracted_root = tempdir().expect("tempdir");
+        fs::write(extracted_root.path().join("skill.md"), "# sample\n").expect("write manifest");
+
+        let repo = ParsedRepoInfo {
+            owner: "demo-owner".to_string(),
+            repo: "demo-root-skill".to_string(),
+            ref_name: "main".to_string(),
+            scope_path: String::new(),
+        };
+
+        let discovered = service
+            .list_skills(&repo, extracted_root.path())
+            .expect("discovered");
+
+        assert_eq!(discovered.len(), 1);
+        assert_eq!(discovered[0].relative_path, ".");
+        assert_eq!(discovered[0].destination_name, "demo-root-skill");
+        assert_eq!(discovered[0].manifest_path, "skill.md");
+    }
+
+    #[test]
+    fn install_one_accepts_root_lowercase_manifest() {
+        let service = SkillService::new().expect("service");
+        let extracted_root = tempdir().expect("source tempdir");
+        let target_root = tempdir().expect("target tempdir");
+
+        fs::write(extracted_root.path().join("skill.md"), "# sample\n").expect("write manifest");
+        fs::create_dir_all(extracted_root.path().join("examples")).expect("create examples");
+        fs::write(
+            extracted_root.path().join("examples").join("guide.txt"),
+            "installed fixture\n",
+        )
+        .expect("write guide");
+
+        let descriptor = SkillDescriptor {
+            relative_path: ".".to_string(),
+            destination_name: "demo-root-skill".to_string(),
+            manifest_path: "skill.md".to_string(),
+        };
+
+        let destination = service
+            .install_one(
+                extracted_root.path(),
+                target_root.path(),
+                &descriptor,
+                false,
+            )
+            .expect("install");
+
+        assert!(destination.join("skill.md").is_file());
+        assert!(destination.join("examples").join("guide.txt").is_file());
+    }
+
+    #[test]
+    fn root_skill_fixture_round_trips_from_workspace_fixture() {
+        let service = SkillService::new().expect("service");
+        let fixture_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("tests")
+            .join("fixtures")
+            .join("repos")
+            .join("root-skill-fixture");
+        let target_root = tempdir().expect("target tempdir");
+
+        let repo = ParsedRepoInfo {
+            owner: "demo-owner".to_string(),
+            repo: "root-skill-fixture".to_string(),
+            ref_name: "main".to_string(),
+            scope_path: String::new(),
+        };
+
+        let discovered = service
+            .list_skills(&repo, &fixture_root)
+            .expect("discover fixture");
+        assert_eq!(discovered.len(), 1);
+        assert_eq!(discovered[0].relative_path, ".");
+        assert_eq!(discovered[0].manifest_path, "skill.md");
+
+        let destination = service
+            .install_one(&fixture_root, target_root.path(), &discovered[0], false)
+            .expect("install fixture");
+
+        assert!(destination.join("skill.md").is_file());
+        assert!(destination.join("references").join("hello.md").is_file());
     }
 }

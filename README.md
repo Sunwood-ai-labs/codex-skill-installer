@@ -28,7 +28,7 @@ Codex Skill Installer is a Tauri 2 desktop app with a React + TypeScript fronten
 
 ## ✨ Highlights
 
-- Paste a GitHub repository, `tree`, or `blob` URL and inspect it for folders that contain `SKILL.md`.
+- Paste a GitHub repository, `tree`, or `blob` URL and inspect it for folders that contain a skill manifest (`SKILL.md` or `skill.md`).
 - Review the detected skills in a dedicated shortlist before installing anything.
 - Install selected skills into the local Codex skills directory with optional overwrite support.
 - Work through top-level `Setup`, `Shortlist`, and `Transcript` tabs instead of one long scrolling form.

@@ -28,7 +28,7 @@ Codex Skill Installer は、React + TypeScript のフロントエンドと Rust 
 
 ## ✨ 特徴
 
-- GitHub リポジトリ、`tree`、`blob` の URL を貼り付けて、`SKILL.md` を含むフォルダを検出できます。
+- GitHub リポジトリ、`tree`、`blob` の URL を貼り付けて、skill manifest（`SKILL.md` または `skill.md`）を含むフォルダを検出できます。
 - 検出結果は専用のショートリストで確認してから、インストール対象を選べます。
 - 選択した skill を、上書きの有無を切り替えながらローカルの Codex skills ディレクトリへインストールできます。
 - `Setup`、`Shortlist`、`Transcript` の 3 つのトップレベルタブで作業できます。

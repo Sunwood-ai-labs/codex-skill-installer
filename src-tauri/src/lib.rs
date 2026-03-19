@@ -6,7 +6,9 @@ use core::SkillService;
 
 #[tauri::command]
 fn default_destination() -> Result<String, String> {
-    Ok(core::path_to_forward_slashes(&SkillService::default_destination()))
+    Ok(core::path_to_forward_slashes(
+        &SkillService::default_destination(),
+    ))
 }
 
 #[tauri::command]
