@@ -62,3 +62,16 @@ Remote: `https://github.com/Sunwood-ai-labs/codex-skill-installer`
 - Choosing a software license is a legal choice; only add `LICENSE` if a safe inference is available.
 - Existing PowerShell output shows mojibake for Japanese strings, so runtime validation must rely on build/UI evidence rather than console rendering alone.
 - GitHub Pages currently appears disabled (`404` on Pages API), so enablement must be checked explicitly if Pages deployment is added.
+
+## Verification Completed
+
+- `npm run build` passed in a clean verification worktree.
+- `npm run docs:build` passed in a clean verification worktree.
+- `cargo test --manifest-path src-tauri/Cargo.toml` passed in a clean verification worktree.
+- `npx npm@10 ci` passed in a clean verification worktree after dependency alignment.
+
+## Final Notes
+
+- The desktop app dependency set was aligned from React 19 to React 18 because `vitepress` currently brings `@docsearch/react@3.8.2`, whose peer range is `< 19`.
+- The lockfile was regenerated with npm 10 to match the Node 22 GitHub Actions environment used by `build-desktop`.
+- GitHub Pages is enabled for workflow-based publishing, but the docs workflow still cannot be dispatched from this branch until the workflow file exists on the default branch (`main`) or the default branch is changed.
