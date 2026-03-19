@@ -4,6 +4,7 @@ version = "0.2.0"
 description = "Cross-platform desktop app for installing Codex skills from GitHub repositories."
 authors = ["Sunwood-ai-labs"]
 edition = "2021"
+license = "MIT"
 repository = "https://github.com/Sunwood-ai-labs/codex-skill-installer"
 
 [lib]

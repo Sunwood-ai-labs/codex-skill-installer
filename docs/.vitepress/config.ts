@@ -5,11 +5,11 @@ import { defineConfig } from "vitepress";
 const repoPath = "/codex-skill-installer/";
 const repositoryUrl = "https://github.com/Sunwood-ai-labs/codex-skill-installer";
 const brandMark = "/brand/codex-skill-installer-mark.svg";
+const brandMarkWithBase = `${repoPath}brand/codex-skill-installer-mark.svg`;
 
 export default defineConfig({
   base: repoPath,
   cleanUrls: true,
-  ignoreDeadLinks: [/README(?:\.ja)?$/],
   lastUpdated: true,
   title: "Codex Skill Installer",
   description: "Desktop app for reviewing and installing Codex skills from GitHub repositories.",
@@ -24,7 +24,7 @@ export default defineConfig({
   head: [
     ["meta", { name: "theme-color", content: "#a45e37" }],
     ["meta", { name: "author", content: "Sunwood-ai-labs" }],
-    ["link", { rel: "icon", href: brandMark, type: "image/svg+xml" }],
+    ["link", { rel: "icon", href: brandMarkWithBase, type: "image/svg+xml" }],
   ],
   themeConfig: {
     logo: brandMark,

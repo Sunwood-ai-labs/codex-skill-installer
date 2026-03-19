@@ -2,6 +2,12 @@
   "name": "codex-skill-forge",
   "private": true,
   "version": "0.2.0",
+  "description": "Cross-platform desktop app for reviewing and installing Codex skills from GitHub repositories.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Sunwood-ai-labs/codex-skill-installer.git"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 1420",
@@ -12,6 +18,7 @@
     "preview": "vite preview --host 127.0.0.1 --port 1420",
     "tauri": "tauri"
   },
+  "homepage": "https://sunwood-ai-labs.github.io/codex-skill-installer/",
   "dependencies": {
     "@tauri-apps/api": "^2.8.0",
     "react": "^19.2.0",

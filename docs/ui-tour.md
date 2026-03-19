@@ -1,16 +1,24 @@
 # Codex Skill Installer UI Tour
 
-This note captures the current desktop flow after the Tauri 2 migration, the flattened custom window chrome pass, the typography cleanup, compact-height scaling fixes, and the bilingual UI pass.
+<p align="center">
+  <img src="brand/codex-skill-installer-mark.svg" alt="Codex Skill Installer mark" width="120">
+</p>
+
+<p align="center">
+  A quick tour of the review-first desktop flow, from `Setup` to `Transcript`.
+</p>
+
+English · [日本語](ja/ui-tour.md)
 
 ## Tabs
 
-The app is organized around three top-level tabs:
+The app is organized around three top-level tabs.
 
-- `Setup`: lock the repository URL, optional ref override, destination folder, and overwrite policy before inspection.
+- `Setup`: confirm the repository URL, optional ref override, destination folder, and overwrite policy before inspection.
 - `Shortlist`: review detected skill folders before selecting what should actually be installed.
 - `Transcript`: keep a running ledger of inspect and install events in one place.
 
-The title bar also includes a persisted `EN / 日本語` toggle so the desktop shell can be operated in English or Japanese without changing the workflow structure. The current chrome sits flush with the window frame instead of floating inside an outer margin.
+The title bar also includes a persisted language toggle, so the shell can switch between English and Japanese without changing the workflow structure. The custom chrome sits flush with the window frame instead of floating inside an outer margin.
 
 ## Setup
 

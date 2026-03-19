@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Codex Skill Installer mark</title>
+  <desc id="desc">A layered geometric icon in warm paper, ink, accent, and teal tones.</desc>
+  <defs>
+    <linearGradient id="bg" x1="28" y1="20" x2="228" y2="236" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#172129"/>
+      <stop offset="1" stop-color="#22313b"/>
+    </linearGradient>
+    <linearGradient id="paper" x1="56" y1="68" x2="200" y2="180" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fbf6ee"/>
+      <stop offset="1" stop-color="#efe4d2"/>
+    </linearGradient>
+  </defs>
+  <rect x="16" y="16" width="224" height="224" rx="56" fill="url(#bg)"/>
+  <rect x="42" y="46" width="172" height="164" rx="34" fill="url(#paper)"/>
+  <path d="M72 84c0-8.8 7.2-16 16-16h82c8.8 0 16 7.2 16 16v34H72V84z" fill="#315e55"/>
+  <path d="M72 112h112c8.8 0 16 7.2 16 16v42c0 8.8-7.2 16-16 16H72c-8.8 0-16-7.2-16-16v-42c0-8.8 7.2-16 16-16z" fill="#f4ece0"/>
+  <path d="M84 130h80v12H84z" fill="#a45e37"/>
+  <path d="M84 156h54v12H84z" fill="#315e55"/>
+  <circle cx="176" cy="154" r="18" fill="#a45e37"/>
+  <path d="M170 154l7 7 15-15" fill="none" stroke="#fbf6ee" stroke-linecap="round" stroke-linejoin="round" stroke-width="7"/>
+  <path d="M188 74h14v14h-14z" fill="#fbf6ee" opacity="0.92"/>
+  <path d="M194 80h2" stroke="#172129" stroke-linecap="round" stroke-width="5"/>
+</svg>
+
